@@ -96,9 +96,20 @@ server.listen(port, () => {
 app.get("/", (req, res) => {
     res.send("Welcome To TilBase")
 })
-app.get("/ping", (req, res) => {
-    console.log("pinged successfully");
-    res.status(200).json({message: "pinged"})
+app.get("/ping", async (req, res) => {
+    try {
+        if (connection) {
+            await connection.execute("SELECT 1");
+            console.log("pinged successfully");
+            res.status(200).json({message: "pinged"})
+        } else {
+            console.log("ping failed: No DB connection");
+            res.status(503).json({message: "Service Unavailable: No DB connection"})
+        }
+    } catch (error) {
+        console.log("ping failed", error);
+        res.status(500).json({message: "ping failed", error})
+    }
 })
 
 app.post("/devSignUp", async (req, res) => {
