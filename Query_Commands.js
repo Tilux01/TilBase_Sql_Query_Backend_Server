@@ -1,8 +1,8 @@
 export const fetchHistory = async (connection, user_id, project_id, page = 1) => {
     const limit = 16;
     const offset = (page - 1) * 15;
-    const command = 'SELECT * FROM `Project_History` WHERE user_id=? AND Project_id=? ORDER BY id DESC LIMIT ? OFFSET ?'
-    const value = [user_id, project_id, limit, offset]
+    const command = `SELECT * FROM \`Project_History\` WHERE user_id=? AND Project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+    const value = [user_id, project_id];
     try {
         const [result] = await connection.execute(command, value)
         return result

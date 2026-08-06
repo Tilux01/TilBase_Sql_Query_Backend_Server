@@ -65,8 +65,8 @@ const fetchCluster = async (id, project_id) => {
 const fetchClusters = async (project_id, page = 1) => {
     const limit = 16;
     const offset = (page - 1) * 15;
-    const command = 'SELECT * FROM `Cluster_Table` WHERE project_id=? ORDER BY id DESC LIMIT ? OFFSET ?'
-    const value = [project_id, limit, offset]
+    const command = `SELECT * FROM \`Cluster_Table\` WHERE project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+    const value = [project_id];
     const [execute] = await connection.execute(command, value)
     return execute
 }
