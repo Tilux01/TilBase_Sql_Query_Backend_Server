@@ -1,3 +1,4 @@
+require("dotenv").config()
 const express = require("express")
 const app = express()
 const cors = require("cors")
@@ -89,7 +90,7 @@ const apiGuard = require("./Middleware/apiGuard");
 
 app.post("/api/auth", auth)
 
-const port = 4255
+const port = process.env.PORT || 4255
 server.listen(port, () => {
     console.log("App running on port " + port);
 })
