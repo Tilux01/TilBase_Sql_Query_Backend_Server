@@ -1,0 +1,40 @@
+{
+  "metadata": {
+    "project_id": 4,
+    "cluster_id": 9,
+    "cluster_name": "Cluster-986h1",
+    "cluster_engine": "hierarchical",
+    "timestamp": "2026-08-05T21:36:51.609Z",
+    "record_count": 4
+  },
+  "data": [
+    {
+      "id": "160c07dc-196c-46cf-b42b-eb464a4d77b4",
+      "parent_id": "cdbb7ef7-5d60-474a-b0f0-e9b90f8da903",
+      "data_payload": "{\"name\":\"New Child Node\"}",
+      "created_at": "2026-08-05T21:13:09.000Z",
+      "updated_at": "2026-08-05T21:13:09.000Z"
+    },
+    {
+      "id": "386e346a-26a2-4524-950d-60abdecd31d7",
+      "parent_id": null,
+      "data_payload": "{\"name\":\"New Child Node\"}",
+      "created_at": "2026-08-05T21:12:27.000Z",
+      "updated_at": "2026-08-05T21:12:27.000Z"
+    },
+    {
+      "id": "8efb2d8e-5519-4cc4-be53-6a2e5c68d6ae",
+      "parent_id": "386e346a-26a2-4524-950d-60abdecd31d7",
+      "data_payload": "{\"name\":\"New Child Node\"}",
+      "created_at": "2026-08-05T21:12:44.000Z",
+      "updated_at": "2026-08-05T21:12:44.000Z"
+    },
+    {
+      "id": "cdbb7ef7-5d60-474a-b0f0-e9b90f8da903",
+      "parent_id": "386e346a-26a2-4524-950d-60abdecd31d7",
+      "data_payload": "{\"hjmk\":\"  \"}",
+      "created_at": "2026-08-05T21:13:05.000Z",
+      "updated_at": "2026-08-05T21:23:23.000Z"
+    }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "metadata": {
+    "project_id": 4,
+    "cluster_id": 6,
+    "cluster_name": "Cluster-9g5dg",
+    "timestamp": "2026-08-02T16:07:40.876Z"
+  },
+  "data": {
+    "message": "This is a local snapshot backup containing cluster data."
+  }
+}
