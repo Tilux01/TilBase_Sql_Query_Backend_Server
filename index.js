@@ -10,6 +10,10 @@ app.use(express.json());
 app.use(cors())
 
 const server = http.createServer(app);
+const port = process.env.PORT || 4255
+server.listen(port, () => {
+    console.log("App running on port " + port);
+})
 const io = new Server(server, {
   cors: {
     origin: "*",
@@ -90,10 +94,7 @@ const apiGuard = require("./Middleware/apiGuard");
 
 app.post("/api/auth", auth)
 
-const port = process.env.PORT || 4255
-server.listen(port, () => {
-    console.log("App running on port " + port);
-})
+
 app.get("/", (req, res) => {
     res.send("Welcome To TilBase")
 })
