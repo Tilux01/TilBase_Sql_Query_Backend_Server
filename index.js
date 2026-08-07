@@ -53,6 +53,7 @@ const startDB = async () => {
         console.log(error);
     })
 }
+console.log(connection);
 const serverName = "TiluxM001"
 const serverRegion = "Nigeria"
 const auth = require("./Controllers/Authentication");
