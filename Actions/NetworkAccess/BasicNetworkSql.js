@@ -23,8 +23,8 @@ const addNetworkRuleSql = async (project_id, IP_Address, Description) => {
 const fetchNetworkRulesSql = async (project_id, page = 1) => {
     const limit = 16;
     const offset = (page - 1) * 15;
-    const command = 'SELECT * FROM Network_Access WHERE project_id=? ORDER BY id DESC LIMIT ? OFFSET ?'
-    const [execute] = await connection.execute(command, [project_id, limit, offset])
+    const command = `SELECT * FROM Network_Access WHERE project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
+    const [execute] = await connection.execute(command, [project_id])
     return execute
 }
 const deleteNetworkRuleSql = async (id, project_id) => {

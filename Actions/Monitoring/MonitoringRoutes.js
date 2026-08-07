@@ -44,8 +44,8 @@ const getMonitoringData = async (req, res) => {
         
         const limit = 16;
         const offset = (page - 1) * 15;
-        const alertsCommand = 'SELECT * FROM `Project_History` WHERE Project_id=? AND History_Type=? ORDER BY id DESC LIMIT ? OFFSET ?';
-        const [alerts] = await connection.execute(alertsCommand, [projectId, 'Alert', limit, offset]);
+        const alertsCommand = `SELECT * FROM \`Project_History\` WHERE Project_id=? AND History_Type=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+        const [alerts] = await connection.execute(alertsCommand, [projectId, 'Alert']);
 
         return res.status(201).json({
             message: {

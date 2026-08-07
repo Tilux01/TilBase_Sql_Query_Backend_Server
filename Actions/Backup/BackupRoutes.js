@@ -26,8 +26,8 @@ const getBackups = async (req, res) => {
     try {
         const limit = 16;
         const offset = (page - 1) * 15;
-        const fetchCommand = 'SELECT * FROM `Cluster_Backups` WHERE project_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?';
-        const [backups] = await connection.execute(fetchCommand, [projectId, limit, offset]);
+        const fetchCommand = `SELECT * FROM \`Cluster_Backups\` WHERE project_id=? ORDER BY created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+        const [backups] = await connection.execute(fetchCommand, [projectId]);
         
         
         const clusterCommand = 'SELECT id, Cluster_Name FROM `Cluster_Table` WHERE project_id=?';

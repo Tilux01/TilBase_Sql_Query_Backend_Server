@@ -34,8 +34,8 @@ const fetchSupportTickets = async (req, res) => {
 
     try {
         const connection = await makeConnection();
-        const query = 'SELECT * FROM Support_Tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?';
-        const [result] = await connection.execute(query, [userId, limit, offset]);
+        const query = `SELECT * FROM Support_Tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+        const [result] = await connection.execute(query, [userId]);
         res.status(200).json({ message: result });
     } catch (error) {
         console.error("Error fetching tickets:", error);
@@ -55,9 +55,9 @@ const fetchAllSupportTickets = async (req, res) => {
             FROM Support_Tickets t 
             LEFT JOIN user_cred u ON t.user_id = u.id 
             ORDER BY t.created_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT ${Number(limit)} OFFSET ${Number(offset)}
         `;
-        const [result] = await connection.execute(query, [limit, offset]);
+        const [result] = await connection.execute(query, []);
         res.status(200).json({ message: result });
     } catch (error) {
         console.error("Error fetching all tickets:", error);

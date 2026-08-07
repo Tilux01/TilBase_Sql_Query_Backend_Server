@@ -23,8 +23,8 @@ const addDbUserSql = async (project_id, DB_Username, DB_Password, Role) => {
 const fetchDbUsersSql = async (project_id, page = 1) => {
     const limit = 16;
     const offset = (page - 1) * 15;
-    const command = 'SELECT * FROM Database_Users WHERE project_id=? ORDER BY id DESC LIMIT ? OFFSET ?'
-    const [execute] = await connection.execute(command, [project_id, limit, offset])
+    const command = `SELECT * FROM Database_Users WHERE project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
+    const [execute] = await connection.execute(command, [project_id])
     return execute
 }
 const deleteDbUserSql = async (id, project_id) => {

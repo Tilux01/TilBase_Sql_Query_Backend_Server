@@ -49,8 +49,8 @@ const fetchInvoices = async (req, res) => {
         const connection = await makeConnection();
         const limit = 16;
         const offset = (page - 1) * 15;
-        const fetchQuery = 'SELECT * FROM Billing_Invoices WHERE user_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?';
-        const [invoices] = await connection.execute(fetchQuery, [user_id, limit, offset]);
+        const fetchQuery = `SELECT * FROM Billing_Invoices WHERE user_id=? ORDER BY created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+        const [invoices] = await connection.execute(fetchQuery, [user_id]);
         
         return res.status(200).json({ invoices });
     } catch (error) {

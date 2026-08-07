@@ -40,8 +40,8 @@ const getSecurityOverview = async (req, res) => {
         
         const limit = 16;
         const offset = (page - 1) * 15;
-        const historyCommand = 'SELECT * FROM `Project_History` WHERE user_id=? AND Project_id=? ORDER BY id DESC LIMIT ? OFFSET ?';
-        const [historyResults] = await connection.execute(historyCommand, [userId, projectId, limit, offset]);
+        const historyCommand = `SELECT * FROM \`Project_History\` WHERE user_id=? AND Project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+        const [historyResults] = await connection.execute(historyCommand, [userId, projectId]);
 
         return res.status(201).json({
             message: {
