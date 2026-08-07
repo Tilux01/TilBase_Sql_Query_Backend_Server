@@ -15,20 +15,20 @@ const upgradePlan = async (req, res) => {
         
         
         const planPrice = plan_name === 'premium' ? 199 : (plan_name === 'standard' ? 49 : 0);
-        await connection.execute(updatePlanQuery, [plan_name, planPrice, user_id]);
+        await connection.query(updatePlanQuery, [plan_name, planPrice, user_id]);
         
         
         if (plan_name === 'premium') {
-            await connection.execute('UPDATE Plan SET Ram=?, Cloud_Storage=?, Highest_Project=?, Highest_CLusters=? WHERE user_id=?', [32, 100000, 9999, 9999, user_id]);
+            await connection.query('UPDATE Plan SET Ram=?, Cloud_Storage=?, Highest_Project=?, Highest_CLusters=? WHERE user_id=?', [32, 100000, 9999, 9999, user_id]);
         } else if (plan_name === 'standard') {
-            await connection.execute('UPDATE Plan SET Ram=?, Cloud_Storage=?, Highest_Project=?, Highest_CLusters=? WHERE user_id=?', [8, 10000, 10, 20, user_id]);
+            await connection.query('UPDATE Plan SET Ram=?, Cloud_Storage=?, Highest_Project=?, Highest_CLusters=? WHERE user_id=?', [8, 10000, 10, 20, user_id]);
         } else {
-            await connection.execute('UPDATE Plan SET Ram=?, Cloud_Storage=?, Highest_Project=?, Highest_CLusters=? WHERE user_id=?', [0.5, 1000, 1, 2, user_id]);
+            await connection.query('UPDATE Plan SET Ram=?, Cloud_Storage=?, Highest_Project=?, Highest_CLusters=? WHERE user_id=?', [0.5, 1000, 1, 2, user_id]);
         }
 
         
         const insertInvoiceQuery = 'INSERT INTO Billing_Invoices (user_id, plan_name, amount, status) VALUES (?, ?, ?, ?)';
-        const [invoiceResult] = await connection.execute(insertInvoiceQuery, [user_id, plan_name, amount, 'paid']);
+        const [invoiceResult] = await connection.query(insertInvoiceQuery, [user_id, plan_name, amount, 'paid']);
 
         return res.status(200).json({ message: "Plan upgraded successfully", invoiceId: invoiceResult.insertId });
 
@@ -50,7 +50,7 @@ const fetchInvoices = async (req, res) => {
         const limit = 16;
         const offset = (page - 1) * 15;
         const fetchQuery = `SELECT * FROM Billing_Invoices WHERE user_id=? ORDER BY created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
-        const [invoices] = await connection.execute(fetchQuery, [user_id]);
+        const [invoices] = await connection.query(fetchQuery, [user_id]);
         
         return res.status(200).json({ invoices });
     } catch (error) {

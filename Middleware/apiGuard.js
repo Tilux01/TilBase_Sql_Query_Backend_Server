@@ -21,7 +21,7 @@ const apiGuard = async (req, res, next) => {
             req.user = decoded;
             if (requestedClusterId) {
                 if (!connection) return res.status(500).json({ message: "Database not ready" });
-                const [rows] = await connection.execute(
+                const [rows] = await connection.query(
                     'SELECT id, project_id FROM Cluster_Table WHERE id = ? AND user_id = ?', 
                     [requestedClusterId, decoded.userId]
                 );
@@ -99,12 +99,12 @@ const apiGuard = async (req, res, next) => {
         ].includes(req.path);
 
         if (isWriteOperation && req.user_id) {
-            const [planRows] = await connection.execute('SELECT Cloud_Storage FROM Plan WHERE user_id = ?', [req.user_id]);
+            const [planRows] = await connection.query('SELECT Cloud_Storage FROM Plan WHERE user_id = ?', [req.user_id]);
             if (planRows.length > 0) {
                 const cloudStorageMB = planRows[0].Cloud_Storage;
                 const maxBytes = cloudStorageMB * 1024 * 1024;
 
-                const [clusterRows] = await connection.execute('SELECT SUM(space_used) as total_used FROM Cluster_Table WHERE user_id = ?', [req.user_id]);
+                const [clusterRows] = await connection.query('SELECT SUM(space_used) as total_used FROM Cluster_Table WHERE user_id = ?', [req.user_id]);
                 const totalUsed = clusterRows[0].total_used || 0;
 
                 if (totalUsed >= maxBytes) {

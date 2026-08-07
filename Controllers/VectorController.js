@@ -19,7 +19,7 @@ const euclideanSimilarity = (a, b) => 1 / (1 + euclideanDistance(a, b));
 const getNamespaces = async (req, res) => {
     const { clusterId } = req.body;
     try {
-        const [rows] = await connection.execute(
+        const [rows] = await connection.query(
             'SELECT namespace, COUNT(*) as count FROM Vector_Store WHERE cluster_id = ? GROUP BY namespace',
             [clusterId]
         );
@@ -33,7 +33,7 @@ const getNamespaces = async (req, res) => {
 const getVectors = async (req, res) => {
     const { clusterId, namespace } = req.body;
     try {
-        const [rows] = await connection.execute(
+        const [rows] = await connection.query(
             'SELECT id, vector_id as vectorId, dense_vector, sparse_text as sparse, metadata FROM Vector_Store WHERE cluster_id = ? AND namespace = ? ORDER BY created_at DESC LIMIT 100',
             [clusterId, namespace]
         );
@@ -64,7 +64,7 @@ const upsertVector = async (req, res) => {
         const metaStr = JSON.stringify(metadata || {});
         
         
-        const [existing] = await connection.execute("SELECT dense_vector, sparse_text, metadata FROM Vector_Store WHERE cluster_id = ? AND namespace = ? AND vector_id = ?", [clusterId, namespace, vectorId]);
+        const [existing] = await connection.query("SELECT dense_vector, sparse_text, metadata FROM Vector_Store WHERE cluster_id = ? AND namespace = ? AND vector_id = ?", [clusterId, namespace, vectorId]);
         let oldSize = 0;
         if (existing.length > 0) {
             oldSize = Buffer.byteLength(existing[0].dense_vector || '[]', 'utf8') + Buffer.byteLength(existing[0].sparse_text || '', 'utf8') + Buffer.byteLength(existing[0].metadata || '{}', 'utf8');
@@ -80,7 +80,7 @@ const upsertVector = async (req, res) => {
                 sparse_text = VALUES(sparse_text),
                 metadata = VALUES(metadata)
         `;
-        await connection.execute(query, [
+        await connection.query(query, [
             clusterId, namespace, vectorId, 
             denseStr, 
             sparse || "", 
@@ -90,8 +90,8 @@ const upsertVector = async (req, res) => {
         const projectId = req.project_id || req.sdk_project_id;
         const userId = req.user_id || req.sdk_user_id;
         if (projectId && userId) {
-            if (sizeDelta !== 0) await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            if (sizeDelta !== 0) await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Vector Upsert', `Vector ${vectorId} upserted in ${namespace}`, 'Active', 'vectorWrite', `Delta: ${sizeDelta} bytes`]);
         }
         
@@ -106,13 +106,13 @@ const deleteVector = async (req, res) => {
     const { clusterId, namespace, vectorId } = req.body;
     try {
         
-        const [existing] = await connection.execute("SELECT dense_vector, sparse_text, metadata FROM Vector_Store WHERE cluster_id = ? AND namespace = ? AND vector_id = ?", [clusterId, namespace, vectorId]);
+        const [existing] = await connection.query("SELECT dense_vector, sparse_text, metadata FROM Vector_Store WHERE cluster_id = ? AND namespace = ? AND vector_id = ?", [clusterId, namespace, vectorId]);
         let sizeDelta = 0;
         if (existing.length > 0) {
             sizeDelta = Buffer.byteLength(existing[0].dense_vector || '[]', 'utf8') + Buffer.byteLength(existing[0].sparse_text || '', 'utf8') + Buffer.byteLength(existing[0].metadata || '{}', 'utf8');
         }
         
-        await connection.execute(
+        await connection.query(
             'DELETE FROM Vector_Store WHERE cluster_id = ? AND namespace = ? AND vector_id = ?',
             [clusterId, namespace, vectorId]
         );
@@ -120,8 +120,8 @@ const deleteVector = async (req, res) => {
         const projectId = req.project_id || req.sdk_project_id;
         const userId = req.user_id || req.sdk_user_id;
         if (projectId && userId && sizeDelta > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = space_used - ? WHERE id = ?', [sizeDelta, clusterId]);
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('UPDATE Cluster_Table SET space_used = space_used - ? WHERE id = ?', [sizeDelta, clusterId]);
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Vector Delete', `Vector ${vectorId} deleted from ${namespace}`, 'Active', 'vectorDelete', `Delta: -${sizeDelta} bytes`]);
         }
         
@@ -158,7 +158,7 @@ const semanticSearch = async (req, res) => {
             params.push(queryText);
         }
 
-        const [rows] = await connection.execute(sql, params);
+        const [rows] = await connection.query(sql, params);
 
         let results = rows.map(r => {
             let score = 0;

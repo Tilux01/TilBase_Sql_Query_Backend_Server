@@ -25,7 +25,7 @@ const getMonitoringData = async (req, res) => {
     try {
         
         const clusterCommand = 'SELECT id, Cluster_Name, Cluster_Type, Current_State FROM `Cluster_Table` WHERE project_id=?';
-        const [clusters] = await connection.execute(clusterCommand, [projectId]);
+        const [clusters] = await connection.query(clusterCommand, [projectId]);
 
         
         
@@ -39,13 +39,13 @@ const getMonitoringData = async (req, res) => {
             GROUP BY DATE(created_at)
             ORDER BY date ASC
         `;
-        const [metrics] = await connection.execute(metricsCommand, [projectId]);
+        const [metrics] = await connection.query(metricsCommand, [projectId]);
 
         
         const limit = 16;
         const offset = (page - 1) * 15;
         const alertsCommand = `SELECT * FROM \`Project_History\` WHERE Project_id=? AND History_Type=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
-        const [alerts] = await connection.execute(alertsCommand, [projectId, 'Alert']);
+        const [alerts] = await connection.query(alertsCommand, [projectId, 'Alert']);
 
         return res.status(201).json({
             message: {

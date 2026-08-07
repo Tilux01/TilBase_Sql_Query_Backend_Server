@@ -3,13 +3,13 @@ const crypto = require('crypto');
 const dbConfig = { host: 'localhost', user: 'root', password: '', database: 'TilBase' };
 
 async function getProjectDetails(connection, clusterId) {
-    const [rows] = await connection.execute('SELECT project_id, user_id FROM Cluster_Table WHERE id = ?', [clusterId]);
+    const [rows] = await connection.query('SELECT project_id, user_id FROM Cluster_Table WHERE id = ?', [clusterId]);
     return rows.length > 0 ? { projectId: rows[0].project_id, userId: rows[0].user_id } : { projectId: null, userId: null };
 }
 
 async function logMetric(connection, projectId, clusterId, queryType, executionTimeMs, io) {
     if (!projectId) return;
-    await connection.execute('INSERT INTO Query_Metrics (project_id, cluster_id, query_type, execution_time_ms) VALUES (?, ?, ?, ?)', [projectId, clusterId, queryType, executionTimeMs]);
+    await connection.query('INSERT INTO Query_Metrics (project_id, cluster_id, query_type, execution_time_ms) VALUES (?, ?, ?, ?)', [projectId, clusterId, queryType, executionTimeMs]);
     if (io) {
         const payload = { clusterId, queryType, executionTimeMs, timestamp: new Date().toISOString() };
         io.to(`cluster_${clusterId}`).emit('metricUpdate', payload);
@@ -29,14 +29,14 @@ async function addNode(req, res) {
         const byteSize = Buffer.byteLength(payloadStr, 'utf8');
         
         const query = 'INSERT INTO Graph_Nodes (id, cluster_id, node_label, properties, byte_size) VALUES (?, ?, ?, ?, ?)';
-        await connection.execute(query, [id, clusterId, nodeLabel, payloadStr, byteSize]);
+        await connection.query(query, [id, clusterId, nodeLabel, payloadStr, byteSize]);
         
         if (byteSize > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [byteSize, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [byteSize, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Write', `Node ${id} created`, 'Active', 'documentWrite', `Delta: ${byteSize} bytes`]);
         }
         
@@ -61,7 +61,7 @@ async function updateNode(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
-        const [oldRows] = await connection.execute('SELECT properties, byte_size FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
+        const [oldRows] = await connection.query('SELECT properties, byte_size FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         if (oldRows.length === 0) {
             await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
@@ -80,14 +80,14 @@ async function updateNode(req, res) {
         const newByteSize = Buffer.byteLength(finalPayloadStr, 'utf8');
         const delta = newByteSize - oldByteSize;
         
-        await connection.execute('UPDATE Graph_Nodes SET properties = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', [finalPayloadStr, newByteSize, nodeId, clusterId]);
+        await connection.query('UPDATE Graph_Nodes SET properties = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', [finalPayloadStr, newByteSize, nodeId, clusterId]);
         
         if (delta !== 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [delta, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [delta, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Update', `Node ${nodeId} updated`, 'Active', 'documentWrite', `Delta: ${delta} bytes`]);
         }
         
@@ -112,25 +112,25 @@ async function deleteNode(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
-        const [nodeRows] = await connection.execute('SELECT byte_size FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
+        const [nodeRows] = await connection.query('SELECT byte_size FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         if (nodeRows.length === 0) {
             await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
         }
         
-        const [edgeRows] = await connection.execute('SELECT byte_size FROM Graph_Edges WHERE cluster_id = ? AND (source_id = ? OR target_id = ?)', [clusterId, nodeId, nodeId]);
+        const [edgeRows] = await connection.query('SELECT byte_size FROM Graph_Edges WHERE cluster_id = ? AND (source_id = ? OR target_id = ?)', [clusterId, nodeId, nodeId]);
         
         let totalSizeToFree = nodeRows[0].byte_size;
         edgeRows.forEach(r => { totalSizeToFree += r.byte_size; });
         
-        await connection.execute('DELETE FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
+        await connection.query('DELETE FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         
         if (totalSizeToFree > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [totalSizeToFree, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [totalSizeToFree, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Delete', `Node ${nodeId} and related edges deleted`, 'Active', 'documentDelete', `Delta: -${totalSizeToFree} bytes`]);
         }
         
@@ -160,14 +160,14 @@ async function addEdge(req, res) {
         const byteSize = Buffer.byteLength(payloadStr, 'utf8');
         
         const query = 'INSERT INTO Graph_Edges (id, cluster_id, source_id, target_id, edge_label, weight, properties, directed, byte_size) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
-        await connection.execute(query, [id, clusterId, sourceId, targetId, edgeLabel, weight, payloadStr, directed, byteSize]);
+        await connection.query(query, [id, clusterId, sourceId, targetId, edgeLabel, weight, payloadStr, directed, byteSize]);
         
         if (byteSize > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [byteSize, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [byteSize, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Edge Write', `Edge ${id} created`, 'Active', 'documentWrite', `Delta: ${byteSize} bytes`]);
         }
         
@@ -192,7 +192,7 @@ async function deleteEdge(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
-        const [oldRows] = await connection.execute('SELECT byte_size FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
+        const [oldRows] = await connection.query('SELECT byte_size FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
         if (oldRows.length === 0) {
             await connection.end();
             return res.status(404).json({ success: false, message: 'Edge not found' });
@@ -200,14 +200,14 @@ async function deleteEdge(req, res) {
         
         const sizeToFree = oldRows[0].byte_size;
         
-        await connection.execute('DELETE FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
+        await connection.query('DELETE FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
         
         if (sizeToFree > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [sizeToFree, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [sizeToFree, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Edge Delete', `Edge ${edgeId} deleted`, 'Active', 'documentDelete', `Delta: -${sizeToFree} bytes`]);
         }
         
@@ -232,8 +232,8 @@ async function getGraph(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId } = await getProjectDetails(connection, clusterId);
         
-        const [nodes] = await connection.execute('SELECT id, node_label, properties FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
-        const [edges] = await connection.execute('SELECT id, source_id, target_id, edge_label, weight, properties, directed FROM Graph_Edges WHERE cluster_id = ?', [clusterId]);
+        const [nodes] = await connection.query('SELECT id, node_label, properties FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
+        const [edges] = await connection.query('SELECT id, source_id, target_id, edge_label, weight, properties, directed FROM Graph_Edges WHERE cluster_id = ?', [clusterId]);
         
         const end = performance.now();
         const io = req.app.get('io');
@@ -254,7 +254,7 @@ async function getNeighbors(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId } = await getProjectDetails(connection, clusterId);
         
-        const [edges] = await connection.execute('SELECT * FROM Graph_Edges WHERE cluster_id = ? AND (source_id = ? OR (target_id = ? AND directed = FALSE))', [clusterId, nodeId, nodeId]);
+        const [edges] = await connection.query('SELECT * FROM Graph_Edges WHERE cluster_id = ? AND (source_id = ? OR (target_id = ? AND directed = FALSE))', [clusterId, nodeId, nodeId]);
         
         const neighborIds = new Set();
         edges.forEach(e => {
@@ -265,7 +265,7 @@ async function getNeighbors(req, res) {
         let nodes = [];
         if (neighborIds.size > 0) {
             const placeholders = Array.from(neighborIds).map(() => '?').join(',');
-            const [nRows] = await connection.execute(`SELECT * FROM Graph_Nodes WHERE id IN (${placeholders})`, Array.from(neighborIds));
+            const [nRows] = await connection.query(`SELECT * FROM Graph_Nodes WHERE id IN (${placeholders})`, Array.from(neighborIds));
             nodes = nRows;
         }
         
@@ -289,7 +289,7 @@ async function updateEdge(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
-        const [oldRows] = await connection.execute('SELECT properties, byte_size, weight FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
+        const [oldRows] = await connection.query('SELECT properties, byte_size, weight FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
         if (oldRows.length === 0) {
             await connection.end();
             return res.status(404).json({ success: false, message: 'Edge not found' });
@@ -307,14 +307,14 @@ async function updateEdge(req, res) {
         const sizeDelta = newSize - oldSize;
         const newWeight = weight !== undefined ? weight : oldRows[0].weight;
         
-        await connection.execute('UPDATE Graph_Edges SET properties = ?, byte_size = ?, weight = ? WHERE id = ? AND cluster_id = ?', [payloadStr, newSize, newWeight, edgeId, clusterId]);
+        await connection.query('UPDATE Graph_Edges SET properties = ?, byte_size = ?, weight = ? WHERE id = ? AND cluster_id = ?', [payloadStr, newSize, newWeight, edgeId, clusterId]);
         
         if (sizeDelta !== 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Edge Update', `Edge ${edgeId} updated`, 'Active', 'documentWrite', `Delta: ${sizeDelta} bytes`]);
         }
         
@@ -347,7 +347,7 @@ async function queryGraph(req, res) {
             params.push(nodeLabel);
         }
         
-        const [nodes] = await connection.execute(query, params);
+        const [nodes] = await connection.query(query, params);
         
         let filteredNodes = nodes;
         if (propertiesMatch && Object.keys(propertiesMatch).length > 0) {
@@ -381,19 +381,19 @@ async function clearGraph(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
-        const [nodeSum] = await connection.execute('SELECT SUM(byte_size) as total FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
-        const [edgeSum] = await connection.execute('SELECT SUM(byte_size) as total FROM Graph_Edges WHERE cluster_id = ?', [clusterId]);
+        const [nodeSum] = await connection.query('SELECT SUM(byte_size) as total FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
+        const [edgeSum] = await connection.query('SELECT SUM(byte_size) as total FROM Graph_Edges WHERE cluster_id = ?', [clusterId]);
         const sizeToFree = (nodeSum[0].total || 0) + (edgeSum[0].total || 0);
         
-        await connection.execute('DELETE FROM Graph_Edges WHERE cluster_id = ?', [clusterId]);
-        await connection.execute('DELETE FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
+        await connection.query('DELETE FROM Graph_Edges WHERE cluster_id = ?', [clusterId]);
+        await connection.query('DELETE FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
         
         if (sizeToFree > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [sizeToFree, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [sizeToFree, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Graph Cleared', 'All nodes and edges deleted', 'Active', 'documentDelete', `Delta: -${sizeToFree} bytes`]);
         }
         

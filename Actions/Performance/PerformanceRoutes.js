@@ -36,7 +36,7 @@ const getPerformanceData = async (req, res) => {
             WHERE c.project_id = ?
             GROUP BY c.id
         `;
-        const [clusterLatencies] = await connection.execute(clusterLatencyCommand, [projectId]);
+        const [clusterLatencies] = await connection.query(clusterLatencyCommand, [projectId]);
 
         
         const throughputCommand = `
@@ -46,7 +46,7 @@ const getPerformanceData = async (req, res) => {
             FROM \`Query_Metrics\`
             WHERE project_id = ? AND created_at >= DATE_SUB(NOW(), INTERVAL 1 HOUR)
         `;
-        const [throughput] = await connection.execute(throughputCommand, [projectId]);
+        const [throughput] = await connection.query(throughputCommand, [projectId]);
 
         
         const trendCommand = `
@@ -58,7 +58,7 @@ const getPerformanceData = async (req, res) => {
             GROUP BY DATE(created_at)
             ORDER BY date ASC
         `;
-        const [latencyTrend] = await connection.execute(trendCommand, [projectId]);
+        const [latencyTrend] = await connection.query(trendCommand, [projectId]);
 
         return res.status(200).json({
             message: {
@@ -82,7 +82,7 @@ const logQueryMetric = async (req, res) => {
 
     try {
         const insertCommand = 'INSERT INTO `Query_Metrics` (project_id, cluster_id, query_type, execution_time_ms) VALUES (?, ?, ?, ?)';
-        await connection.execute(insertCommand, [projectId, clusterId, queryType, executionTimeMs]);
+        await connection.query(insertCommand, [projectId, clusterId, queryType, executionTimeMs]);
         
         const io = req.app.get('io');
         if (io) {

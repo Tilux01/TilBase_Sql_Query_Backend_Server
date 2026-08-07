@@ -11,7 +11,7 @@ const createSupportTicket = async (req, res) => {
         const query = 'INSERT INTO Support_Tickets (user_id, subject, category, details, status) VALUES (?, ?, ?, ?, "open")';
         const values = [userId, subject, category, details];
         
-        const [result] = await connection.execute(query, values);
+        const [result] = await connection.query(query, values);
         if (result.insertId) {
             res.status(201).json({ message: "Ticket created successfully", ticketId: result.insertId });
         } else {
@@ -35,7 +35,7 @@ const fetchSupportTickets = async (req, res) => {
     try {
         const connection = await makeConnection();
         const query = `SELECT * FROM Support_Tickets WHERE user_id = ? ORDER BY created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
-        const [result] = await connection.execute(query, [userId]);
+        const [result] = await connection.query(query, [userId]);
         res.status(200).json({ message: result });
     } catch (error) {
         console.error("Error fetching tickets:", error);
@@ -57,7 +57,7 @@ const fetchAllSupportTickets = async (req, res) => {
             ORDER BY t.created_at DESC
             LIMIT ${Number(limit)} OFFSET ${Number(offset)}
         `;
-        const [result] = await connection.execute(query, []);
+        const [result] = await connection.query(query, []);
         res.status(200).json({ message: result });
     } catch (error) {
         console.error("Error fetching all tickets:", error);
@@ -74,7 +74,7 @@ const updateTicketStatus = async (req, res) => {
     try {
         const connection = await makeConnection();
         const query = 'UPDATE Support_Tickets SET status = ? WHERE id = ?';
-        const [result] = await connection.execute(query, [status, ticketId]);
+        const [result] = await connection.query(query, [status, ticketId]);
         if (result.affectedRows > 0) {
             res.status(200).json({ message: "Ticket status updated successfully" });
         } else {

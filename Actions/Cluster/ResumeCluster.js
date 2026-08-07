@@ -21,7 +21,7 @@ const resumeCluster = async(req, res) =>{
         } 
         const pauseCommand = 'UPDATE Cluster_Table SET Current_State=? WHERE id=?'
         const values = ["active", cluster_id]
-        const [execute] = await connection.execute(pauseCommand, values)
+        const [execute] = await connection.query(pauseCommand, values)
         
         await logClusterEvent(connection, user_Id, ProjectId, `Cluster "${CheckAuth.cluster.Cluster_Name}" resumed`, `Cluster was resumed on Project ${CheckAuth.projectName}`, 'clusterResume', CheckAuth.cluster.Cluster_Key)
         

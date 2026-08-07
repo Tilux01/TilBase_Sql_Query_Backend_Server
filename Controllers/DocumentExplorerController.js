@@ -171,9 +171,9 @@ const setDocumentData = async (req, res) => {
         const userId = req.user_id || req.sdk_user_id;
         if (projectId && userId) {
             if (sizeDelta !== 0) {
-                await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
+                await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
             }
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Document Write', `Document saved at ${path}`, 'Active', 'documentWrite', `Delta: ${sizeDelta} bytes`]);
         }
 
@@ -211,8 +211,8 @@ const deleteDocument = async (req, res) => {
         const projectId = req.project_id || req.sdk_project_id;
         const userId = req.user_id || req.sdk_user_id;
         if (projectId && userId && sizeDelta > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = space_used - ? WHERE id = ?', [sizeDelta, clusterId]);
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('UPDATE Cluster_Table SET space_used = space_used - ? WHERE id = ?', [sizeDelta, clusterId]);
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Document Delete', `Document(s) deleted at ${path}`, 'Active', 'documentDelete', `Delta: -${sizeDelta} bytes`]);
         }
 
@@ -291,9 +291,9 @@ const updateDocument = async (req, res) => {
         const userId = req.user_id || req.sdk_user_id;
         if (projectId && userId) {
             if (sizeDelta !== 0) {
-                await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
+                await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
             }
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Document Update', `Document updated at ${path}`, 'Active', 'documentUpdate', `Delta: ${sizeDelta} bytes`]);
         }
 
@@ -454,8 +454,8 @@ const bulkSaveDocuments = async (req, res) => {
         const projectId = req.project_id || req.sdk_project_id;
         const userId = req.user_id || req.sdk_user_id;
         if (projectId && userId) {
-            if (sizeDelta !== 0) await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            if (sizeDelta !== 0) await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [sizeDelta, clusterId]);
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Bulk Document Save', `Bulk inserted ${documentsArray.length} documents to ${parentPath}`, 'Active', 'documentWrite', `Delta: ${sizeDelta} bytes`]);
         }
 

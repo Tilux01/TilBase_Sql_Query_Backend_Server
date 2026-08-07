@@ -35,7 +35,7 @@ const createCluster = async (req, res) => {
     }
     const checkClusterCommand = 'SELECT id FROM `Cluster_Table` WHERE Cluster_Key=?'
     const values = [Cluster_Key]
-    const [executeCommand] = await connection.execute(checkClusterCommand, values)
+    const [executeCommand] = await connection.query(checkClusterCommand, values)
     if (executeCommand?.length > 0) {
         return res.status(400).json({message: "A cluster with the key already exist"})
     }

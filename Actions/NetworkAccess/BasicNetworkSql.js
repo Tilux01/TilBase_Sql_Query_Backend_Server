@@ -13,7 +13,7 @@ const addNetworkRuleSql = async (project_id, IP_Address, Description) => {
     try {
         const command = 'INSERT INTO Network_Access (project_id, IP_Address, Description) VALUES (?, ?, ?)'
         const values = [project_id, IP_Address, Description]
-        const [execute] = await connection.execute(command, values)
+        const [execute] = await connection.query(command, values)
         return execute?.insertId
     } catch (error) {
         console.log("Error adding rule", error);
@@ -24,13 +24,13 @@ const fetchNetworkRulesSql = async (project_id, page = 1) => {
     const limit = 16;
     const offset = (page - 1) * 15;
     const command = `SELECT * FROM Network_Access WHERE project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`
-    const [execute] = await connection.execute(command, [project_id])
+    const [execute] = await connection.query(command, [project_id])
     return execute
 }
 const deleteNetworkRuleSql = async (id, project_id) => {
     try {
         const command = 'DELETE FROM Network_Access WHERE id=? AND project_id=?'
-        const [execute] = await connection.execute(command, [id, project_id])
+        const [execute] = await connection.query(command, [id, project_id])
         return execute
     } catch (error) {
         console.log("Error deleting rule", error);

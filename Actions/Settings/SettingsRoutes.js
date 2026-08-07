@@ -19,7 +19,7 @@ const updateProfile = async (req, res) => {
     try {
         const connection = await makeConnection();
         const command = 'UPDATE `user_cred` SET UserName=?, Profile_Img=? WHERE id=?';
-        await connection.execute(command, [UserName, Profile_Img || null, user_id]);
+        await connection.query(command, [UserName, Profile_Img || null, user_id]);
         return res.status(200).json({ message: "Profile updated successfully", Profile_Img });
     } catch (error) {
         console.error("Error updating profile:", error);
@@ -37,12 +37,12 @@ const updateWorkspace = async (req, res) => {
     try {
         const connection = await makeConnection();
         const command = 'UPDATE `Project_Table` SET Project_Name=?, Project_Description=? WHERE id=? AND user_id=?';
-        await connection.execute(command, [Project_Name, Project_Description || '', project_id, user_id]);
+        await connection.query(command, [Project_Name, Project_Description || '', project_id, user_id]);
         
         // Log to history
         const historyCommand = 'INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)';
         const historyValues = [user_id, project_id, `Workspace Updated`, `Project name or description was updated`, 'Active', 'settings', `ID: ${project_id}`];
-        await connection.execute(historyCommand, historyValues);
+        await connection.query(historyCommand, historyValues);
 
         return res.status(200).json({ message: "Workspace updated successfully" });
     } catch (error) {
@@ -62,12 +62,12 @@ const deleteAccount = async (req, res) => {
         const connection = await makeConnection();
         
         
-        await connection.execute('DELETE FROM `Project_History` WHERE user_id=?', [user_id]);
-        await connection.execute('DELETE FROM `Cluster_Table` WHERE user_id=?', [user_id]);
-        await connection.execute('DELETE FROM `Project_Table` WHERE user_id=?', [user_id]);
-        await connection.execute('DELETE FROM `Plan` WHERE user_id=?', [user_id]);
-        await connection.execute('DELETE FROM `Billing_Invoices` WHERE user_id=?', [user_id]);
-        await connection.execute('DELETE FROM `user_cred` WHERE id=?', [user_id]);
+        await connection.query('DELETE FROM `Project_History` WHERE user_id=?', [user_id]);
+        await connection.query('DELETE FROM `Cluster_Table` WHERE user_id=?', [user_id]);
+        await connection.query('DELETE FROM `Project_Table` WHERE user_id=?', [user_id]);
+        await connection.query('DELETE FROM `Plan` WHERE user_id=?', [user_id]);
+        await connection.query('DELETE FROM `Billing_Invoices` WHERE user_id=?', [user_id]);
+        await connection.query('DELETE FROM `user_cred` WHERE id=?', [user_id]);
         
         return res.status(200).json({ message: "Account deleted successfully" });
     } catch (error) {

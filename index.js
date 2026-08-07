@@ -101,7 +101,7 @@ app.get("/", (req, res) => {
 app.get("/ping", async (req, res) => {
     try {
         if (connection) {
-            await connection.execute("SELECT 1");
+            await connection.query("SELECT 1");
             console.log("pinged successfully");
             res.status(200).json({message: "pinged"})
         } else {
@@ -134,7 +134,7 @@ app.post("/devSignUp", async (req, res) => {
     }
     try {
         const checkQuery = 'SELECT * FROM user_cred WHERE Email=?';
-        const [existingUser] = await connection.execute(checkQuery, [mail]);
+        const [existingUser] = await connection.query(checkQuery, [mail]);
         if (existingUser.length > 0) {
             const userCred = existingUser[0];
             if (userCred?.Auth_Provider && userCred.Auth_Provider !== 'local') {
@@ -149,19 +149,19 @@ app.post("/devSignUp", async (req, res) => {
         const Profile_Key = crypto.randomUUID()
         const values = [mail, password, userName, Profile_Key]
         try {
-            const [result] = await connection.execute(addDevUser, values);
+            const [result] = await connection.query(addDevUser, values);
             console.log("Created User with Id of: ", result.insertId);
             const sendRequest = await sendOTP(mail)
             if (sendRequest) {
                 const addOTP = `INSERT INTO OTP_Table (user_id, OTP_Code,  email_address) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE OTP_Code = ?`
                 const values = [result.insertId, sendRequest, mail, sendRequest]
                 try {
-                    const [OTPResult] = await connection.execute(addOTP, values)
+                    const [OTPResult] = await connection.query(addOTP, values)
                     console.log("OTP Result", OTPResult);
                     const planCommand = 'INSERT INTO Plan (user_id) VALUES (?)'
                     const planValue = [result.insertId]
                     try {
-                        const [planAdd] = await connection.execute(planCommand, planValue)
+                        const [planAdd] = await connection.query(planCommand, planValue)
                         res.status(201).json({ message: result.insertId })
                     } catch (error) {
                         res.status(501).json({ message: "Error creating user plan" })
@@ -194,7 +194,7 @@ app.post("/resendOTP", async (req, res) => {
         const addOTP = `INSERT INTO OTP_Table (user_id, OTP_Code,  email_address) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE OTP_Code = ?`
         const values = [id, sendRequest, mail, sendRequest]
         try {
-            const [OTPResult] = await connection.execute(addOTP, values)
+            const [OTPResult] = await connection.query(addOTP, values)
             console.log("OTP Result", OTPResult);
         } catch (error) {
             res.status(501).json({ message: "Server error, please try again later" })
@@ -216,23 +216,23 @@ app.post("/confirmOTP", async (req, res) => {
     try {
         const query = 'SELECT OTP_Code FROM `OTP_Table` WHERE user_id=? AND email_address=?'
         const values = [id, mail]
-        const [result] = await connection.execute(query, values)
+        const [result] = await connection.query(query, values)
         console.log("Real-OTP", result[0]);
         if (result[0]?.OTP_Code == OTP) {
             const verifyAccount = 'UPDATE user_cred SET Verified=true WHERE id=?'
             const idValue = [id]
             try {
-                const [verifyResult] = await connection.execute(verifyAccount, idValue)
+                const [verifyResult] = await connection.query(verifyAccount, idValue)
                 console.log(verifyResult);
                 const query = 'SELECT * FROM user_cred WHERE Email=?;'
                 const values = [mail]
                 try {
-                    const [userCred] = await connection.execute(query, values)
+                    const [userCred] = await connection.query(query, values)
                     if (userCred.length > 0) {
                         try {
                             const getPlanCommand = 'SELECT * FROM Plan WHERE user_id=?'
                             const getPlanValue = [userCred[0]?.id]
-                            const [getPlan] = await connection.execute(getPlanCommand, getPlanValue)
+                            const [getPlan] = await connection.query(getPlanCommand, getPlanValue)
                             const token = jwt.sign({ type: 'dashboard', userId: userCred[0].id }, JWT_SECRET);
                             res.status(201).json({ message: userCred[0], getPlan: getPlan[0], token })
                         } catch (error) {
@@ -277,14 +277,14 @@ app.post("/devSignIn", async (req, res) => {
     const query = 'SELECT * FROM user_cred WHERE Email=?;'
     const values = [mail]
     try {
-        const [result] = await connection.execute(query, values)
+        const [result] = await connection.query(query, values)
         if (result.length > 0) {
             const userCred = result[0]
             if (userCred?.Password == password) {
                 try {
                     const getPlanCommand = 'SELECT * FROM Plan WHERE user_id=?'
                     const getPlanValue = [userCred?.id]
-                    const [getPlan] = await connection.execute(getPlanCommand, getPlanValue)
+                    const [getPlan] = await connection.query(getPlanCommand, getPlanValue)
                     const token = jwt.sign({ type: 'dashboard', userId: userCred.id }, JWT_SECRET);
                     res.status(201).json({ message: userCred, getPlan: getPlan[0], token })
                 } catch (error) {
@@ -323,7 +323,7 @@ app.post("/oauthSignIn", async (req, res) => {
 
     try {
         const query = 'SELECT * FROM user_cred WHERE Email=?;';
-        const [result] = await connection.execute(query, [email]);
+        const [result] = await connection.query(query, [email]);
 
         let userCred;
 
@@ -331,26 +331,26 @@ app.post("/oauthSignIn", async (req, res) => {
             userCred = result[0];
             
             if (userCred.Verified != 1) {
-                await connection.execute('UPDATE user_cred SET Verified=1 WHERE id=?', [userCred.id]);
+                await connection.query('UPDATE user_cred SET Verified=1 WHERE id=?', [userCred.id]);
                 userCred.Verified = 1;
             }
         } else {
             const profileKey = crypto.randomUUID();
             const insertQuery = `INSERT INTO user_cred(Email, Password, UserName, Profile_Key, Verified, Profile_Img, Auth_Provider, Provider_ID) 
                                  VALUES(?, NULL, ?, ?, 1, ?, ?, ?)`;
-            const [insertResult] = await connection.execute(insertQuery, [
+            const [insertResult] = await connection.query(insertQuery, [
                 email, displayName, profileKey, photoURL || 'https://cdn-icons-png.flaticon.com/128/456/456212.png', providerId, uid
             ]);
             
-            const [newResult] = await connection.execute(query, [email]);
+            const [newResult] = await connection.query(query, [email]);
             userCred = newResult[0];
 
             const planCommand = 'INSERT INTO Plan(user_id) VALUES(?)';
-            await connection.execute(planCommand, [userCred.id]);
+            await connection.query(planCommand, [userCred.id]);
         }
 
         const getPlanCommand = 'SELECT * FROM Plan WHERE user_id=?';
-        const [getPlan] = await connection.execute(getPlanCommand, [userCred.id]);
+        const [getPlan] = await connection.query(getPlanCommand, [userCred.id]);
         const token = jwt.sign({ type: 'dashboard', userId: userCred.id }, JWT_SECRET);
         res.status(201).json({ message: userCred, getPlan: getPlan[0], token });
 
@@ -426,7 +426,7 @@ app.post("/getProjects", async (req, res) => {
     const userCredCommand = 'SELECT id,Profile_Key FROM `user_cred` WHERE id=?'
     const userCredValue = [id]
     try {
-        const [result] = await connection.execute(userCredCommand, userCredValue)
+        const [result] = await connection.query(userCredCommand, userCredValue)
         console.log(result);
         if (result.length == 0) {
             res.status(501).json({ message: "invalid id given, please provide correct id and profile_Key" })
@@ -504,11 +504,11 @@ app.post("/fetchHistory", async (req, res) => {
         return res.status(501).json({ message: "Missing parameters" });
     }
     const checkUserCommand = 'SELECT id FROM `user_cred` WHERE id=? AND Profile_Key=?';
-    const [checkUser] = await connection.execute(checkUserCommand, [userId, Profile_Key]);
+    const [checkUser] = await connection.query(checkUserCommand, [userId, Profile_Key]);
     if (checkUser.length === 0) return res.status(501).json({ message: "Auth failed" });
     
     const checkProjectCommand = 'SELECT id FROM `Project_Table` WHERE id=? AND Project_Key=? AND user_id=?';
-    const [checkProject] = await connection.execute(checkProjectCommand, [projectId, projectKey, userId]);
+    const [checkProject] = await connection.query(checkProjectCommand, [projectId, projectKey, userId]);
     if (checkProject.length === 0) return res.status(501).json({ message: "Auth failed" });
     
     const History = await fetchHistory(connection, userId, projectId, page);
@@ -522,17 +522,17 @@ app.post("/markHistoryRead", async (req, res) => {
     }
     try {
         const checkUserCommand = 'SELECT id FROM `user_cred` WHERE id=? AND Profile_Key=?';
-        const [checkUser] = await connection.execute(checkUserCommand, [userId, Profile_Key]);
+        const [checkUser] = await connection.query(checkUserCommand, [userId, Profile_Key]);
         if (checkUser.length === 0) return res.status(501).json({ message: "Auth failed" });
         
         const checkProjectCommand = 'SELECT id FROM `Project_Table` WHERE id=? AND Project_Key=? AND user_id=?';
-        const [checkProject] = await connection.execute(checkProjectCommand, [projectId, projectKey, userId]);
+        const [checkProject] = await connection.query(checkProjectCommand, [projectId, projectKey, userId]);
         if (checkProject.length === 0) return res.status(501).json({ message: "Auth failed" });
 
         if (historyIds.length > 0) {
             const placeholders = historyIds.map(() => '?').join(',');
             const updateCommand = `UPDATE \`Project_History\` SET is_read = 1 WHERE user_id=? AND Project_id=? AND id IN (${placeholders})`;
-            await connection.execute(updateCommand, [userId, projectId, ...historyIds]);
+            await connection.query(updateCommand, [userId, projectId, ...historyIds]);
         }
         res.status(200).json({ message: "Success" });
     } catch (err) {

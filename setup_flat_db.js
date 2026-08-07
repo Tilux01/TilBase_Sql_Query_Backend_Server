@@ -25,7 +25,7 @@ async function createFlatDbTable() {
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
         `;
 
-        await connection.execute(query);
+        await connection.query(query);
         console.log("Flat_Database table created successfully.");
         await connection.end();
     } catch (error) {

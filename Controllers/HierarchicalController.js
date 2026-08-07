@@ -38,13 +38,13 @@ const deleteNestedValue = (obj, path) => {
 };
 
 async function getProjectDetails(connection, clusterId) {
-    const [rows] = await connection.execute('SELECT project_id, user_id FROM Cluster_Table WHERE id = ?', [clusterId]);
+    const [rows] = await connection.query('SELECT project_id, user_id FROM Cluster_Table WHERE id = ?', [clusterId]);
     return rows.length > 0 ? { projectId: rows[0].project_id, userId: rows[0].user_id } : { projectId: null, userId: null };
 }
 
 async function logMetric(connection, projectId, clusterId, queryType, executionTimeMs, io) {
     if (!projectId) return;
-    await connection.execute('INSERT INTO Query_Metrics (project_id, cluster_id, query_type, execution_time_ms) VALUES (?, ?, ?, ?)', [projectId, clusterId, queryType, executionTimeMs]);
+    await connection.query('INSERT INTO Query_Metrics (project_id, cluster_id, query_type, execution_time_ms) VALUES (?, ?, ?, ?)', [projectId, clusterId, queryType, executionTimeMs]);
     if (io) {
         const payload = { clusterId, queryType, executionTimeMs, timestamp: new Date().toISOString() };
         io.to(`cluster_${clusterId}`).emit('metricUpdate', payload);
@@ -64,14 +64,14 @@ async function addNode(req, res) {
         const byteSize = Buffer.byteLength(payloadStr, 'utf8');
         
         const query = 'INSERT INTO Hierarchical_Data (id, cluster_id, parent_id, data_payload, byte_size) VALUES (?, ?, ?, ?, ?)';
-        await connection.execute(query, [id, clusterId, parentId || null, payloadStr, byteSize]);
+        await connection.query(query, [id, clusterId, parentId || null, payloadStr, byteSize]);
         
         if (byteSize > 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [byteSize, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = space_used + ? WHERE id = ?', [byteSize, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Hierarchical Write', `Node ${id} created`, 'Active', 'documentWrite', `Delta: ${byteSize} bytes`]);
         }
         
@@ -120,7 +120,7 @@ async function getChildren(req, res) {
             params.push(Number(limit));
         }
         
-        const [rows] = await connection.execute(query, params);
+        const [rows] = await connection.query(query, params);
         
         const end = performance.now();
         const io = req.app.get('io');
@@ -156,7 +156,7 @@ async function getAncestors(req, res) {
             )
             SELECT * FROM Ancestors ORDER BY depth DESC;
         `;
-        const [rows] = await connection.execute(query, [nodeId, clusterId, clusterId]);
+        const [rows] = await connection.query(query, [nodeId, clusterId, clusterId]);
         
         const end = performance.now();
         const io = req.app.get('io');
@@ -187,7 +187,7 @@ async function countChildren(req, res) {
             query += ' AND parent_id IS NULL';
         }
         
-        const [rows] = await connection.execute(query, params);
+        const [rows] = await connection.query(query, params);
         const count = rows[0].count;
         
         const end = performance.now();
@@ -209,7 +209,7 @@ async function updateNode(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
-        const [oldRows] = await connection.execute('SELECT data_payload, byte_size FROM Hierarchical_Data WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
+        const [oldRows] = await connection.query('SELECT data_payload, byte_size FROM Hierarchical_Data WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         if (oldRows.length === 0) {
             await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
@@ -271,14 +271,14 @@ async function updateNode(req, res) {
         const newByteSize = Buffer.byteLength(finalPayloadStr, 'utf8');
         const delta = newByteSize - oldByteSize;
         
-        await connection.execute('UPDATE Hierarchical_Data SET data_payload = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', [finalPayloadStr, newByteSize, nodeId, clusterId]);
+        await connection.query('UPDATE Hierarchical_Data SET data_payload = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', [finalPayloadStr, newByteSize, nodeId, clusterId]);
         
         if (delta !== 0) {
-            await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [delta, clusterId]);
+            await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [delta, clusterId]);
         }
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Hierarchical Update', `Node ${nodeId} updated`, 'Active', 'documentWrite', `Delta: ${delta} bytes`]);
         }
         
@@ -320,7 +320,7 @@ async function deleteNode(req, res) {
             )
             SELECT id, byte_size FROM Descendants;
         `;
-        const [rows] = await connection.execute(getDescendantsQuery, [nodeId, clusterId, clusterId]);
+        const [rows] = await connection.query(getDescendantsQuery, [nodeId, clusterId, clusterId]);
         
         if (rows.length === 0) {
             await connection.end();
@@ -331,13 +331,13 @@ async function deleteNode(req, res) {
         const idsToDelete = rows.map(r => r.id);
         
         const placeholders = idsToDelete.map(() => '?').join(',');
-        await connection.execute(`DELETE FROM Hierarchical_Data WHERE id IN (${placeholders})`, idsToDelete);
+        await connection.query(`DELETE FROM Hierarchical_Data WHERE id IN (${placeholders})`, idsToDelete);
         
-        await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [totalSizeToFree, clusterId]);
+        await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [totalSizeToFree, clusterId]);
         
         if (projectId && userId) {
             const logCommand = 'INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)';
-            await connection.execute(logCommand, [
+            await connection.query(logCommand, [
                 userId, 
                 projectId, 
                 'Hierarchical Branch Deleted', 
@@ -371,10 +371,10 @@ async function moveNode(req, res) {
         const connection = await mysql.createConnection(dbConfig);
         const projectId = await getProjectId(connection, clusterId);
         
-        await connection.execute('UPDATE Hierarchical_Data SET parent_id = ? WHERE id = ? AND cluster_id = ?', [newParentId || null, nodeId, clusterId]);
+        await connection.query('UPDATE Hierarchical_Data SET parent_id = ? WHERE id = ? AND cluster_id = ?', [newParentId || null, nodeId, clusterId]);
         
         if (projectId && userId) {
-            await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+            await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                 [userId, projectId, 'Hierarchical Move', `Node ${nodeId} moved to parent ${newParentId || 'root'}`, 'Active', 'documentWrite', `Moved node`]);
         }
         
@@ -409,7 +409,7 @@ async function searchNodes(req, res) {
             AND (id LIKE ? OR data_payload LIKE ?) 
             LIMIT 50
         `;
-        const [rows] = await connection.execute(sqlQuery, [clusterId, searchTerm, searchTerm]);
+        const [rows] = await connection.query(sqlQuery, [clusterId, searchTerm, searchTerm]);
         
         const end = performance.now();
         const io = req.app.get('io');
@@ -448,13 +448,13 @@ async function batchWrite(req, res) {
                     const byteSize = Buffer.byteLength(payloadStr, 'utf8');
                     sizeDelta += byteSize;
                     
-                    await connection.execute('INSERT INTO Hierarchical_Data (id, cluster_id, parent_id, data_payload, byte_size) VALUES (?, ?, ?, ?, ?)', 
+                    await connection.query('INSERT INTO Hierarchical_Data (id, cluster_id, parent_id, data_payload, byte_size) VALUES (?, ?, ?, ?, ?)', 
                         [id, clusterId, parentId || null, payloadStr, byteSize]);
                         
                     if (io) io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'add', id, parentId });
                 } 
                 else if (type === 'update') {
-                    const [oldRows] = await connection.execute('SELECT data_payload, byte_size FROM Hierarchical_Data WHERE id = ? AND cluster_id = ? FOR UPDATE', [nodeId, clusterId]);
+                    const [oldRows] = await connection.query('SELECT data_payload, byte_size FROM Hierarchical_Data WHERE id = ? AND cluster_id = ? FOR UPDATE', [nodeId, clusterId]);
                     if (oldRows.length > 0) {
                         const oldByteSize = oldRows[0].byte_size;
                         let finalPayloadStr;
@@ -501,7 +501,7 @@ async function batchWrite(req, res) {
                         const newByteSize = Buffer.byteLength(finalPayloadStr, 'utf8');
                         sizeDelta += (newByteSize - oldByteSize);
                         
-                        await connection.execute('UPDATE Hierarchical_Data SET data_payload = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', 
+                        await connection.query('UPDATE Hierarchical_Data SET data_payload = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', 
                             [finalPayloadStr, newByteSize, nodeId, clusterId]);
                             
                         if (io) io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'update', id: nodeId });
@@ -516,13 +516,13 @@ async function batchWrite(req, res) {
                         )
                         SELECT id, byte_size FROM Descendants;
                     `;
-                    const [rows] = await connection.execute(getDescendantsQuery, [nodeId, clusterId, clusterId]);
+                    const [rows] = await connection.query(getDescendantsQuery, [nodeId, clusterId, clusterId]);
                     if (rows.length > 0) {
                         const totalSizeToFree = rows.reduce((sum, row) => sum + row.byte_size, 0);
                         sizeDelta -= totalSizeToFree;
                         const idsToDelete = rows.map(r => r.id);
                         const placeholders = idsToDelete.map(() => '?').join(',');
-                        await connection.execute(`DELETE FROM Hierarchical_Data WHERE id IN (${placeholders})`, idsToDelete);
+                        await connection.query(`DELETE FROM Hierarchical_Data WHERE id IN (${placeholders})`, idsToDelete);
                         
                         if (io) io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'delete', id: nodeId, deletedCount: rows.length });
                     }
@@ -531,9 +531,9 @@ async function batchWrite(req, res) {
             
             if (projectId && userId) {
                 if (sizeDelta !== 0) {
-                    await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
+                    await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
                 }
-                await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+                await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                     [userId, projectId, 'Hierarchical Batch Transaction', `Executed batch operation of ${operations.length} commands`, 'Active', 'documentWrite', `Delta: ${sizeDelta} bytes`]);
             }
             
@@ -567,7 +567,7 @@ async function bulkUpdate(req, res) {
         if (parentId) { query += ' AND parent_id = ?'; params.push(parentId); } 
         else { query += ' AND parent_id IS NULL'; }
         
-        const [rows] = await connection.execute(query, params);
+        const [rows] = await connection.query(query, params);
         if (rows.length === 0) {
             await connection.end();
             return res.json({ success: true, count: 0 });
@@ -630,7 +630,7 @@ async function bulkUpdate(req, res) {
                     const newByteSize = Buffer.byteLength(finalPayloadStr, 'utf8');
                     sizeDelta += (newByteSize - oldByteSize);
                     
-                    await connection.execute('UPDATE Hierarchical_Data SET data_payload = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', 
+                    await connection.query('UPDATE Hierarchical_Data SET data_payload = ?, byte_size = ? WHERE id = ? AND cluster_id = ?', 
                         [finalPayloadStr, newByteSize, row.id, clusterId]);
                         
                     if (io) io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'update', id: row.id });
@@ -640,9 +640,9 @@ async function bulkUpdate(req, res) {
             
             if (projectId && userId && updateCount > 0) {
                 if (sizeDelta !== 0) {
-                    await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
+                    await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
                 }
-                await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+                await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                     [userId, projectId, 'Hierarchical Bulk Update', `Updated ${updateCount} nodes`, 'Active', 'documentWrite', `Delta: ${sizeDelta} bytes`]);
             }
             
@@ -676,7 +676,7 @@ async function bulkDelete(req, res) {
         if (parentId) { query += ' AND parent_id = ?'; params.push(parentId); } 
         else { query += ' AND parent_id IS NULL'; }
         
-        const [rows] = await connection.execute(query, params);
+        const [rows] = await connection.query(query, params);
         if (rows.length === 0) {
             await connection.end();
             return res.json({ success: true, count: 0 });
@@ -727,13 +727,13 @@ async function bulkDelete(req, res) {
                     )
                     SELECT id, byte_size FROM Descendants;
                 `;
-                const [dRows] = await connection.execute(getDescendantsQuery, [nodeId, clusterId, clusterId]);
+                const [dRows] = await connection.query(getDescendantsQuery, [nodeId, clusterId, clusterId]);
                 if (dRows.length > 0) {
                     const totalSizeToFree = dRows.reduce((sum, r) => sum + r.byte_size, 0);
                     sizeDelta -= totalSizeToFree;
                     const idsToDel = dRows.map(r => r.id);
                     const placeholders = idsToDel.map(() => '?').join(',');
-                    await connection.execute(`DELETE FROM Hierarchical_Data WHERE id IN (${placeholders})`, idsToDel);
+                    await connection.query(`DELETE FROM Hierarchical_Data WHERE id IN (${placeholders})`, idsToDel);
                     
                     if (io) io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'delete', id: nodeId, deletedCount: dRows.length });
                     deleteCount++;
@@ -742,9 +742,9 @@ async function bulkDelete(req, res) {
             
             if (projectId && userId && deleteCount > 0) {
                 if (sizeDelta !== 0) {
-                    await connection.execute('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
+                    await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
                 }
-                await connection.execute('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
+                await connection.query('INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)', 
                     [userId, projectId, 'Hierarchical Bulk Delete', `Deleted ${deleteCount} root branches`, 'Active', 'documentDelete', `Delta: ${sizeDelta} bytes`]);
             }
             

@@ -21,10 +21,10 @@ const deleteCluster = async(req, res) =>{
         } 
         const pauseCommand = 'DELETE FROM Cluster_Table WHERE id=?'
         const values = [cluster_id]
-        const [execute] = await connection.execute(pauseCommand, values)
+        const [execute] = await connection.query(pauseCommand, values)
         
         const updatePlanCommand = 'UPDATE Plan SET Total_Clusters = GREATEST(0, Total_Clusters - 1) WHERE user_id=?'
-        await connection.execute(updatePlanCommand, [user_Id])
+        await connection.query(updatePlanCommand, [user_Id])
         
         await logClusterEvent(connection, user_Id, ProjectId, `Cluster "${CheckAuth.cluster.Cluster_Name}" deleted`, `Cluster deletion successful on Project ${CheckAuth.projectName}`, 'clusterDelete', CheckAuth.cluster.Cluster_Key)
         

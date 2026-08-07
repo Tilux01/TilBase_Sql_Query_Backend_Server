@@ -4,7 +4,7 @@ async function setup() {
     try {
         const conn = await mysql.createConnection({ host: 'localhost', user: 'root', password: '', database: 'TilBase' });
         
-        await conn.execute(`
+        await conn.query(`
             CREATE TABLE IF NOT EXISTS Graph_Nodes (
                 id VARCHAR(255) PRIMARY KEY,
                 cluster_id VARCHAR(255) NOT NULL,
@@ -19,7 +19,7 @@ async function setup() {
         `);
         console.log("Graph_Nodes table created.");
 
-        await conn.execute(`
+        await conn.query(`
             CREATE TABLE IF NOT EXISTS Graph_Edges (
                 id VARCHAR(255) PRIMARY KEY,
                 cluster_id VARCHAR(255) NOT NULL,

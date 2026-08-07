@@ -27,11 +27,11 @@ const getBackups = async (req, res) => {
         const limit = 16;
         const offset = (page - 1) * 15;
         const fetchCommand = `SELECT * FROM \`Cluster_Backups\` WHERE project_id=? ORDER BY created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
-        const [backups] = await connection.execute(fetchCommand, [projectId]);
+        const [backups] = await connection.query(fetchCommand, [projectId]);
         
         
         const clusterCommand = 'SELECT id, Cluster_Name FROM `Cluster_Table` WHERE project_id=?';
-        const [clusters] = await connection.execute(clusterCommand, [projectId]);
+        const [clusters] = await connection.query(clusterCommand, [projectId]);
 
         return res.status(200).json({ message: { backups, clusters } });
     } catch (error) {
@@ -51,7 +51,7 @@ const createBackup = async (req, res) => {
     try {
         
         const typeCommand = 'SELECT Cluster_Type FROM `Cluster_Table` WHERE id=? AND project_id=?';
-        const [clusterInfo] = await connection.execute(typeCommand, [clusterId, projectId]);
+        const [clusterInfo] = await connection.query(typeCommand, [clusterId, projectId]);
         
         if (clusterInfo.length === 0) {
             return res.status(404).json({ message: "Cluster not found." });
@@ -62,20 +62,20 @@ const createBackup = async (req, res) => {
         
         let clusterData = [];
         if (clusterType === 'document') {
-            const [docs] = await connection.execute('SELECT path, document_data, created_at FROM `Document_Store` WHERE cluster_id=?', [clusterId]);
+            const [docs] = await connection.query('SELECT path, document_data, created_at FROM `Document_Store` WHERE cluster_id=?', [clusterId]);
             clusterData = docs;
         } else if (clusterType === 'flat') {
-            const [flats] = await connection.execute('SELECT bucket_name, key_name, value_data, created_at, updated_at FROM `Flat_Database` WHERE cluster_id=?', [clusterId]);
+            const [flats] = await connection.query('SELECT bucket_name, key_name, value_data, created_at, updated_at FROM `Flat_Database` WHERE cluster_id=?', [clusterId]);
             clusterData = flats;
         } else if (clusterType === 'vector') {
-            const [vectors] = await connection.execute('SELECT namespace, vector_id, dense_vector, sparse_text, metadata, created_at FROM `Vector_Store` WHERE cluster_id=?', [clusterId]);
+            const [vectors] = await connection.query('SELECT namespace, vector_id, dense_vector, sparse_text, metadata, created_at FROM `Vector_Store` WHERE cluster_id=?', [clusterId]);
             clusterData = vectors;
         } else if (clusterType === 'hierarchical') {
-            const [nodes] = await connection.execute('SELECT id, parent_id, data_payload, created_at, updated_at FROM `Hierarchical_Data` WHERE cluster_id=?', [clusterId]);
+            const [nodes] = await connection.query('SELECT id, parent_id, data_payload, created_at, updated_at FROM `Hierarchical_Data` WHERE cluster_id=?', [clusterId]);
             clusterData = nodes;
         } else if (clusterType === 'graph') {
-            const [nodes] = await connection.execute('SELECT id, node_label, properties, byte_size, created_at FROM `Graph_Nodes` WHERE cluster_id=?', [clusterId]);
-            const [edges] = await connection.execute('SELECT id, source_id, target_id, edge_label, weight, properties, directed, byte_size FROM `Graph_Edges` WHERE cluster_id=?', [clusterId]);
+            const [nodes] = await connection.query('SELECT id, node_label, properties, byte_size, created_at FROM `Graph_Nodes` WHERE cluster_id=?', [clusterId]);
+            const [edges] = await connection.query('SELECT id, source_id, target_id, edge_label, weight, properties, directed, byte_size FROM `Graph_Edges` WHERE cluster_id=?', [clusterId]);
             clusterData = { nodes, edges };
         }
         
@@ -108,13 +108,13 @@ const createBackup = async (req, res) => {
 
         
         const insertBackup = 'INSERT INTO `Cluster_Backups` (project_id, cluster_id, backup_name, file_path, size_bytes, status) VALUES (?, ?, ?, ?, ?, ?)';
-        await connection.execute(insertBackup, [projectId, clusterId, backupName, filePath, sizeBytes, 'Ready']);
+        await connection.query(insertBackup, [projectId, clusterId, backupName, filePath, sizeBytes, 'Ready']);
 
         
         const historyTitle = `Backup Created`;
         const historyDescription = `A manual backup was successfully generated for cluster [${clusterName}].`;
         const insertHistory = 'INSERT INTO `Project_History` (Project_id, History_Title, History_Description, History_Type, User_id, Status, Other_Stamp) VALUES (?, ?, ?, ?, ?, ?, ?)';
-        await connection.execute(insertHistory, [projectId, historyTitle, historyDescription, 'Backup', userId, 'Success', '']);
+        await connection.query(insertHistory, [projectId, historyTitle, historyDescription, 'Backup', userId, 'Success', '']);
 
         return res.status(200).json({ message: "Backup successfully created" });
     } catch (error) {
@@ -134,7 +134,7 @@ const deleteBackup = async (req, res) => {
     try {
         // Fetch backup to get path
         const fetchCommand = 'SELECT file_path FROM `Cluster_Backups` WHERE id=? AND project_id=?';
-        const [rows] = await connection.execute(fetchCommand, [backupId, projectId]);
+        const [rows] = await connection.query(fetchCommand, [backupId, projectId]);
         
         if (rows.length === 0) {
             return res.status(404).json({ message: "Backup not found" });
@@ -149,13 +149,13 @@ const deleteBackup = async (req, res) => {
 
         // Delete from DB
         const deleteCommand = 'DELETE FROM `Cluster_Backups` WHERE id=? AND project_id=?';
-        await connection.execute(deleteCommand, [backupId, projectId]);
+        await connection.query(deleteCommand, [backupId, projectId]);
 
         // Log to Project_History
         const historyTitle = `Backup Deleted`;
         const historyDescription = `The backup file [${backupName}] was deleted from the vault.`;
         const insertHistory = 'INSERT INTO `Project_History` (Project_id, History_Title, History_Description, History_Type, User_id, Status, Other_Stamp) VALUES (?, ?, ?, ?, ?, ?, ?)';
-        await connection.execute(insertHistory, [projectId, historyTitle, historyDescription, 'Backup', userId, 'Success', '']);
+        await connection.query(insertHistory, [projectId, historyTitle, historyDescription, 'Backup', userId, 'Success', '']);
 
         return res.status(200).json({ message: "Backup successfully deleted" });
     } catch (error) {
@@ -176,7 +176,7 @@ const downloadBackup = async (req, res) => {
 
     try {
         const fetchCommand = 'SELECT file_path, backup_name FROM `Cluster_Backups` WHERE id=? AND project_id=?';
-        const [rows] = await connection.execute(fetchCommand, [id, projectId]);
+        const [rows] = await connection.query(fetchCommand, [id, projectId]);
         
         if (rows.length === 0) {
             return res.status(404).json({ message: "Backup not found" });
