@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
+const makeConnection = require('../SQLConnection');
 const crypto = require('crypto');
-const dbConfig = { host: 'localhost', user: 'root', password: '', database: 'TilBase' };
 
 const getNestedValue = (obj, path) => {
     if (!path.includes('.')) return obj[path];
@@ -56,7 +56,7 @@ async function addNode(req, res) {
     const { clusterId, parentId, dataPayload } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const id = crypto.randomUUID();
@@ -83,7 +83,6 @@ async function addNode(req, res) {
             io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'add', id, parentId });
         }
         
-        await connection.end();
         res.json({ success: true, id });
     } catch (error) {
         console.error(error);
@@ -95,7 +94,7 @@ async function getChildren(req, res) {
     const { clusterId, parentId, queryOptions = {} } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId } = await getProjectDetails(connection, clusterId);
         
         const { orderBy, orderDirection = 'ASC', limit } = queryOptions;
@@ -126,7 +125,6 @@ async function getChildren(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, nodes: rows });
     } catch (error) {
         console.error(error);
@@ -138,7 +136,7 @@ async function getAncestors(req, res) {
     const { clusterId, nodeId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId } = await getProjectDetails(connection, clusterId);
         
         const query = `
@@ -162,7 +160,6 @@ async function getAncestors(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, ancestors: rows });
     } catch (error) {
         console.error(error);
@@ -174,7 +171,7 @@ async function countChildren(req, res) {
     const { clusterId, parentId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId } = await getProjectDetails(connection, clusterId);
         
         let query = 'SELECT COUNT(id) as count FROM Hierarchical_Data WHERE cluster_id = ?';
@@ -194,7 +191,6 @@ async function countChildren(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, count });
     } catch (error) {
         console.error(error);
@@ -206,12 +202,11 @@ async function updateNode(req, res) {
     const { clusterId, nodeId, dataPayload, merge = false } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const [oldRows] = await connection.query('SELECT data_payload, byte_size FROM Hierarchical_Data WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         if (oldRows.length === 0) {
-            await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
         }
         
@@ -290,7 +285,6 @@ async function updateNode(req, res) {
             io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'update', id: nodeId });
         }
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -302,7 +296,7 @@ async function deleteNode(req, res) {
     const { clusterId, nodeId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const getDescendantsQuery = `
@@ -323,7 +317,6 @@ async function deleteNode(req, res) {
         const [rows] = await connection.query(getDescendantsQuery, [nodeId, clusterId, clusterId]);
         
         if (rows.length === 0) {
-            await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
         }
         
@@ -356,7 +349,6 @@ async function deleteNode(req, res) {
             io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'delete', id: nodeId, deletedCount: rows.length });
         }
         
-        await connection.end();
         res.json({ success: true, deletedCount: rows.length });
     } catch (error) {
         console.error(error);
@@ -368,7 +360,7 @@ async function moveNode(req, res) {
     const { clusterId, nodeId, newParentId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const projectId = await getProjectId(connection, clusterId);
         
         await connection.query('UPDATE Hierarchical_Data SET parent_id = ? WHERE id = ? AND cluster_id = ?', [newParentId || null, nodeId, clusterId]);
@@ -386,7 +378,6 @@ async function moveNode(req, res) {
             io.to(`cluster_${clusterId}`).emit('hierarchical_update', { type: 'move', id: nodeId, parentId: newParentId });
         }
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -398,7 +389,7 @@ async function searchNodes(req, res) {
     const { clusterId, query } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const projectId = await getProjectId(connection, clusterId);
         
         const searchTerm = `%${query}%`;
@@ -415,7 +406,6 @@ async function searchNodes(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, nodes: rows });
     } catch (error) {
         console.error(error);
@@ -430,7 +420,7 @@ async function batchWrite(req, res) {
 
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         await connection.beginTransaction();
@@ -541,7 +531,6 @@ async function batchWrite(req, res) {
             
             const end = performance.now();
             await logMetric(connection, projectId, clusterId, 'Write', end - start, io);
-            await connection.end();
             
             res.json({ success: true, message: "Batch write successful" });
         } catch (innerErr) {
@@ -558,7 +547,7 @@ async function bulkUpdate(req, res) {
     const { clusterId, parentId, updateData, queryOptions = {} } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         let query = 'SELECT id, data_payload, byte_size FROM Hierarchical_Data WHERE cluster_id = ?';
@@ -569,7 +558,6 @@ async function bulkUpdate(req, res) {
         
         const [rows] = await connection.query(query, params);
         if (rows.length === 0) {
-            await connection.end();
             return res.json({ success: true, count: 0 });
         }
 
@@ -650,7 +638,6 @@ async function bulkUpdate(req, res) {
             
             const end = performance.now();
             await logMetric(connection, projectId, clusterId, 'Write', end - start, io);
-            await connection.end();
             
             res.json({ success: true, count: updateCount });
         } catch (innerErr) {
@@ -667,7 +654,7 @@ async function bulkDelete(req, res) {
     const { clusterId, parentId, queryOptions = {} } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         let query = 'SELECT id, data_payload FROM Hierarchical_Data WHERE cluster_id = ?';
@@ -678,7 +665,6 @@ async function bulkDelete(req, res) {
         
         const [rows] = await connection.query(query, params);
         if (rows.length === 0) {
-            await connection.end();
             return res.json({ success: true, count: 0 });
         }
 
@@ -707,7 +693,6 @@ async function bulkDelete(req, res) {
         }
         
         if (idsToDeleteTopLevel.length === 0) {
-            await connection.end();
             return res.json({ success: true, count: 0 });
         }
 
@@ -752,7 +737,6 @@ async function bulkDelete(req, res) {
             
             const end = performance.now();
             await logMetric(connection, projectId, clusterId, 'Write', end - start, io);
-            await connection.end();
             
             res.json({ success: true, count: deleteCount });
         } catch (innerErr) {

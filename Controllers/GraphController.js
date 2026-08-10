@@ -1,6 +1,6 @@
 const mysql = require('mysql2/promise');
+const makeConnection = require('../SQLConnection');
 const crypto = require('crypto');
-const dbConfig = { host: 'localhost', user: 'root', password: '', database: 'TilBase' };
 
 async function getProjectDetails(connection, clusterId) {
     const [rows] = await connection.query('SELECT project_id, user_id FROM Cluster_Table WHERE id = ?', [clusterId]);
@@ -21,7 +21,7 @@ async function addNode(req, res) {
     const { clusterId, nodeLabel, properties } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const id = crypto.randomUUID();
@@ -46,7 +46,6 @@ async function addNode(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'addNode', id });
         
-        await connection.end();
         res.json({ success: true, id });
     } catch (error) {
         console.error(error);
@@ -58,12 +57,11 @@ async function updateNode(req, res) {
     const { clusterId, nodeId, properties, merge = true } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const [oldRows] = await connection.query('SELECT properties, byte_size FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         if (oldRows.length === 0) {
-            await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
         }
         
@@ -97,7 +95,6 @@ async function updateNode(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'updateNode', id: nodeId });
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -109,12 +106,11 @@ async function deleteNode(req, res) {
     const { clusterId, nodeId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const [nodeRows] = await connection.query('SELECT byte_size FROM Graph_Nodes WHERE id = ? AND cluster_id = ?', [nodeId, clusterId]);
         if (nodeRows.length === 0) {
-            await connection.end();
             return res.status(404).json({ success: false, message: 'Node not found' });
         }
         
@@ -140,7 +136,6 @@ async function deleteNode(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'deleteNode', id: nodeId });
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -152,7 +147,7 @@ async function addEdge(req, res) {
     const { clusterId, sourceId, targetId, edgeLabel, weight = 1.0, properties, directed = true } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const id = crypto.randomUUID();
@@ -177,7 +172,6 @@ async function addEdge(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'addEdge', id, sourceId, targetId });
         
-        await connection.end();
         res.json({ success: true, id });
     } catch (error) {
         console.error(error);
@@ -189,12 +183,11 @@ async function deleteEdge(req, res) {
     const { clusterId, edgeId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const [oldRows] = await connection.query('SELECT byte_size FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
         if (oldRows.length === 0) {
-            await connection.end();
             return res.status(404).json({ success: false, message: 'Edge not found' });
         }
         
@@ -217,7 +210,6 @@ async function deleteEdge(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'deleteEdge', id: edgeId });
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -229,7 +221,7 @@ async function getGraph(req, res) {
     const { clusterId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId } = await getProjectDetails(connection, clusterId);
         
         const [nodes] = await connection.query('SELECT id, node_label, properties FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
@@ -239,7 +231,6 @@ async function getGraph(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, nodes, edges });
     } catch (error) {
         console.error(error);
@@ -251,7 +242,7 @@ async function getNeighbors(req, res) {
     const { clusterId, nodeId, depth = 1 } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId } = await getProjectDetails(connection, clusterId);
         
         const [edges] = await connection.query('SELECT * FROM Graph_Edges WHERE cluster_id = ? AND (source_id = ? OR (target_id = ? AND directed = FALSE))', [clusterId, nodeId, nodeId]);
@@ -273,7 +264,6 @@ async function getNeighbors(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, nodes, edges });
     } catch (error) {
         console.error(error);
@@ -286,12 +276,11 @@ async function updateEdge(req, res) {
     const { clusterId, edgeId, properties, weight, merge = true } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const [oldRows] = await connection.query('SELECT properties, byte_size, weight FROM Graph_Edges WHERE id = ? AND cluster_id = ?', [edgeId, clusterId]);
         if (oldRows.length === 0) {
-            await connection.end();
             return res.status(404).json({ success: false, message: 'Edge not found' });
         }
         
@@ -324,7 +313,6 @@ async function updateEdge(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'updateEdge', id: edgeId });
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);
@@ -336,7 +324,7 @@ async function queryGraph(req, res) {
     const { clusterId, nodeLabel, propertiesMatch } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId } = await getProjectDetails(connection, clusterId);
         
         let query = 'SELECT id, node_label, properties FROM Graph_Nodes WHERE cluster_id = ?';
@@ -366,7 +354,6 @@ async function queryGraph(req, res) {
         const io = req.app.get('io');
         await logMetric(connection, projectId, clusterId, 'Read', end - start, io);
         
-        await connection.end();
         res.json({ success: true, nodes: filteredNodes });
     } catch (error) {
         console.error(error);
@@ -378,7 +365,7 @@ async function clearGraph(req, res) {
     const { clusterId } = req.body;
     const start = performance.now();
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const { projectId, userId } = await getProjectDetails(connection, clusterId);
         
         const [nodeSum] = await connection.query('SELECT SUM(byte_size) as total FROM Graph_Nodes WHERE cluster_id = ?', [clusterId]);
@@ -403,7 +390,6 @@ async function clearGraph(req, res) {
         
         if (io) io.to(`cluster_${clusterId}`).emit('graph_update', { type: 'clearGraph' });
         
-        await connection.end();
         res.json({ success: true });
     } catch (error) {
         console.error(error);

@@ -1,12 +1,11 @@
 const mysql = require('mysql2/promise');
-const dbConfig = { host: 'localhost', user: 'root', password: '', database: 'TilBase' };
+const makeConnection = require('../SQLConnection');
 
 async function getBuckets(req, res) {
     const { clusterId } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const [rows] = await connection.query('SELECT DISTINCT bucket_name as bucketName FROM Flat_Database WHERE cluster_id = ?', [clusterId]);
-        await connection.end();
         res.json({ success: true, buckets: rows });
     } catch (error) {
         console.error(error);
@@ -17,11 +16,10 @@ async function getBuckets(req, res) {
 async function getKeys(req, res) {
     const { clusterId, bucketName } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         
         await connection.query('DELETE FROM Flat_Database WHERE cluster_id = ? AND expires_at IS NOT NULL AND expires_at < NOW()', [clusterId]);
         const [rows] = await connection.query('SELECT key_name as keyName FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ?', [clusterId, bucketName]);
-        await connection.end();
         res.json({ success: true, keys: rows });
     } catch (error) {
         console.error(error);
@@ -32,16 +30,14 @@ async function getKeys(req, res) {
 async function getValue(req, res) {
     const { clusterId, bucketName, keyName } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         
         const [delRows] = await connection.query('DELETE FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ? AND key_name = ? AND expires_at IS NOT NULL AND expires_at < NOW()', [clusterId, bucketName, keyName]);
         if (delRows.affectedRows > 0) {
-            await connection.end();
             return res.json({ success: true, value: null });
         }
         
         const [rows] = await connection.query('SELECT value_data FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ? AND key_name = ?', [clusterId, bucketName, keyName]);
-        await connection.end();
         if (rows.length === 0) return res.json({ success: true, value: null });
         
         let val = rows[0].value_data;
@@ -56,7 +52,7 @@ async function getValue(req, res) {
 async function setValue(req, res) {
     const { clusterId, bucketName, keyName, value, ttlSeconds } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const valueStr = typeof value === 'object' ? JSON.stringify(value) : String(value);
         
         
@@ -84,7 +80,6 @@ async function setValue(req, res) {
             await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used + ?) WHERE id = ?', [sizeDelta, clusterId]);
         }
 
-        await connection.end();
 
         
         const io = req.app.get('io');
@@ -104,14 +99,13 @@ async function setValue(req, res) {
 async function deleteKey(req, res) {
     const { clusterId, bucketName, keyName } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const [oldRows] = await connection.query('SELECT value_data FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ? AND key_name = ?', [clusterId, bucketName, keyName]);
         if (oldRows.length > 0) {
             const oldSize = Buffer.byteLength(oldRows[0].value_data || '', 'utf8');
             await connection.query('DELETE FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ? AND key_name = ?', [clusterId, bucketName, keyName]);
             await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [oldSize, clusterId]);
         }
-        await connection.end();
         
         const io = req.app.get('io');
         if (io) {
@@ -128,7 +122,7 @@ async function deleteKey(req, res) {
 async function deleteBucket(req, res) {
     const { clusterId, bucketName } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         const [oldRows] = await connection.query('SELECT value_data FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ?', [clusterId, bucketName]);
         
         let oldSize = 0;
@@ -140,7 +134,6 @@ async function deleteBucket(req, res) {
             await connection.query('DELETE FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ?', [clusterId, bucketName]);
             await connection.query('UPDATE Cluster_Table SET space_used = GREATEST(0, space_used - ?) WHERE id = ?', [oldSize, clusterId]);
         }
-        await connection.end();
         
         const io = req.app.get('io');
         if (io) {
@@ -157,7 +150,7 @@ async function deleteBucket(req, res) {
 async function increment(req, res) {
     const { clusterId, bucketName, keyName, amount } = req.body;
     try {
-        const connection = await mysql.createConnection(dbConfig);
+        const connection = await makeConnection();
         
         await connection.beginTransaction();
         const [rows] = await connection.query('SELECT value_data FROM Flat_Database WHERE cluster_id = ? AND bucket_name = ? AND key_name = ? FOR UPDATE', [clusterId, bucketName, keyName]);
@@ -191,7 +184,6 @@ async function increment(req, res) {
         }
         
         await connection.commit();
-        await connection.end();
         
         const io = req.app.get('io');
         if (io) {
