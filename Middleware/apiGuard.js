@@ -22,11 +22,14 @@ const apiGuard = async (req, res, next) => {
             if (requestedClusterId) {
                 if (!connection) return res.status(500).json({ message: "Database not ready" });
                 const [rows] = await connection.query(
-                    'SELECT id, project_id FROM Cluster_Table WHERE id = ? AND user_id = ?', 
+                    'SELECT id, project_id, Current_State FROM Cluster_Table WHERE id = ? AND user_id = ?', 
                     [requestedClusterId, decoded.userId]
                 );
                 if (rows.length === 0) {
                     return res.status(403).json({ message: "Forbidden: You do not own this cluster" });
+                }
+                if (rows[0].Current_State !== 'active') {
+                    return res.status(403).json({ message: "Forbidden: This cluster is currently paused and cannot accept connections." });
                 }
                 req.project_id = rows[0].project_id;
                 req.user_id = decoded.userId;
@@ -39,6 +42,20 @@ const apiGuard = async (req, res, next) => {
             
             if (requestedClusterId && requestedClusterId !== decoded.clusterId) {
                 return res.status(403).json({ message: "Forbidden: SDK Token cluster mismatch" });
+            }
+
+            if (decoded.clusterId) {
+                if (!connection) return res.status(500).json({ message: "Database not ready" });
+                const [clusterRows] = await connection.query(
+                    'SELECT Current_State FROM Cluster_Table WHERE id = ?', 
+                    [decoded.clusterId]
+                );
+                if (clusterRows.length === 0) {
+                    return res.status(404).json({ message: "Cluster not found" });
+                }
+                if (clusterRows[0].Current_State !== 'active') {
+                    return res.status(403).json({ message: "Forbidden: This cluster is currently paused and cannot accept connections." });
+                }
             }
             
             const isSDKWrite = [
@@ -62,7 +79,10 @@ const apiGuard = async (req, res, next) => {
                 '/api/graphExplorer/addEdge',
                 '/api/graphExplorer/deleteEdge',
                 '/api/graphExplorer/updateEdge',
-                '/api/graphExplorer/clearGraph'
+                '/api/graphExplorer/clearGraph',
+                '/api/realtimeExplorer/addNode',
+                '/api/realtimeExplorer/updateNode',
+                '/api/realtimeExplorer/deleteNode'
             ].includes(req.path);
 
             if (isSDKWrite && decoded.role === 'Read Only') {
@@ -95,7 +115,10 @@ const apiGuard = async (req, res, next) => {
             '/api/graphExplorer/addEdge',
             '/api/graphExplorer/deleteEdge',
             '/api/graphExplorer/updateEdge',
-            '/api/graphExplorer/clearGraph'
+            '/api/graphExplorer/clearGraph',
+            '/api/realtimeExplorer/addNode',
+            '/api/realtimeExplorer/updateNode',
+            '/api/realtimeExplorer/deleteNode'
         ].includes(req.path);
 
         if (isWriteOperation && req.user_id) {

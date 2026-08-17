@@ -71,12 +71,13 @@ const { getMonitoringData } = require("./Actions/Monitoring/MonitoringRoutes");
 const { getBackups, createBackup, deleteBackup, downloadBackup } = require("./Actions/Backup/BackupRoutes");
 const { getPerformanceData, logQueryMetric } = require("./Actions/Performance/PerformanceRoutes");
 const { upgradePlan, fetchInvoices } = require("./Actions/Billing/PaymentRoutes");
-const { updateProfile, updateWorkspace, deleteAccount, getCloudinarySignature } = require("./Actions/Settings/SettingsRoutes");
+const { updateProfile, updateWorkspace, deleteAccount, deleteProject, getCloudinarySignature } = require("./Actions/Settings/SettingsRoutes");
 const { createSupportTicket, fetchSupportTickets, fetchAllSupportTickets, updateTicketStatus, adminSignIn } = require("./Actions/Support/SupportRoutes");
 const { getCollections, getDocuments, getDocumentData, setDocumentData, deleteDocument, updateDocument, findDocuments, countDocuments, bulkSaveDocuments, batchWrite } = require("./Controllers/DocumentExplorerController");
 const { getNamespaces, getVectors, upsertVector, deleteVector, semanticSearch } = require("./Controllers/VectorController");
 const { getBuckets, getKeys, getValue, setValue, deleteKey, deleteBucket, increment } = require("./Controllers/FlatController");
 const { addNode, getChildren, getAncestors, updateNode, deleteNode, moveNode, searchNodes, countChildren, batchWrite: hierarchicalBatchWrite, bulkUpdate, bulkDelete } = require("./Controllers/HierarchicalController");
+const { getCollections: realtimeGetCollections, getDocuments: realtimeGetDocuments, getDocumentData: realtimeGetDocumentData, setDocumentData: realtimeSetDocumentData, deleteDocument: realtimeDeleteDocument } = require("./Controllers/RealtimeController");
 const { 
     addNode: graphAddNode, 
     updateNode: graphUpdateNode, 
@@ -578,6 +579,7 @@ app.post("/fetchInvoices", fetchInvoices)
 app.post("/updateProfile", updateProfile)
 app.post("/updateWorkspace", updateWorkspace)
 app.post("/deleteAccount", deleteAccount)
+app.post("/deleteProject", deleteProject)
 app.get("/getCloudinarySignature", getCloudinarySignature)
 
 // Support and Admin
@@ -619,6 +621,15 @@ app.post("/api/hierarchicalExplorer/countChildren", apiGuard, countChildren);
 app.post("/api/hierarchicalExplorer/batchWrite", apiGuard, hierarchicalBatchWrite);
 app.post("/api/hierarchicalExplorer/bulkUpdate", apiGuard, bulkUpdate);
 app.post("/api/hierarchicalExplorer/bulkDelete", apiGuard, bulkDelete);
+
+// ========================
+// REALTIME DB API
+// ========================
+app.post("/api/realtimeExplorer/getCollections", apiGuard, realtimeGetCollections);
+app.post("/api/realtimeExplorer/getDocuments", apiGuard, realtimeGetDocuments);
+app.post("/api/realtimeExplorer/getDocumentData", apiGuard, realtimeGetDocumentData);
+app.post("/api/realtimeExplorer/setDocumentData", apiGuard, realtimeSetDocumentData);
+app.post("/api/realtimeExplorer/deleteDocument", apiGuard, realtimeDeleteDocument);
 
 module.exports = connection
 startDB()

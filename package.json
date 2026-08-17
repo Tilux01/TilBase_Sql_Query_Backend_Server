@@ -21,5 +21,15 @@
     "nodemailer": "^8.0.2",
     "resend": "^6.9.4",
     "socket.io": "^4.8.3"
-  }
+  },
+  "devDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Tilux01/TilBase_Sql_Query_Backend_Server.git"
+  },
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Tilux01/TilBase_Sql_Query_Backend_Server/issues"
+  },
+  "homepage": "https://github.com/Tilux01/TilBase_Sql_Query_Backend_Server#readme"
 }

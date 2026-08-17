@@ -14,6 +14,11 @@ const makeConnection = async() =>{
                 user: process.env.SQL_USER,
                 password: process.env.SQL_PASSWORD,
                 database: process.env.SQL_DATABASE,
+                waitForConnections: true,
+                connectionLimit: 50,
+                queueLimit: 0,
+                enableKeepAlive: true,
+                keepAliveInitialDelay: 0,
                 ssl: {
                     ca: fs.readFileSync('./ca.pem'),
                     rejectUnauthorized: true

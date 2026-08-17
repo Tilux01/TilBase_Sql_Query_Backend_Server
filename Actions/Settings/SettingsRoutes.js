@@ -61,6 +61,14 @@ const deleteAccount = async (req, res) => {
     try {
         const connection = await makeConnection();
         
+        const [projects] = await connection.query('SELECT id FROM `Project_Table` WHERE user_id=?', [user_id]);
+        const projectIds = projects.map(p => p.id);
+        
+        if (projectIds.length > 0) {
+            const placeholders = projectIds.map(() => '?').join(',');
+            await connection.query(`DELETE FROM \`Database_Users\` WHERE project_id IN (${placeholders})`, projectIds);
+            await connection.query(`DELETE FROM \`Network_Access\` WHERE project_id IN (${placeholders})`, projectIds);
+        }
         
         await connection.query('DELETE FROM `Project_History` WHERE user_id=?', [user_id]);
         await connection.query('DELETE FROM `Cluster_Table` WHERE user_id=?', [user_id]);
@@ -73,6 +81,36 @@ const deleteAccount = async (req, res) => {
     } catch (error) {
         console.error("Error deleting account:", error);
         return res.status(500).json({ message: "Internal server error deleting account" });
+    }
+};
+
+const deleteProject = async (req, res) => {
+    const { user_id, project_id } = req.body;
+    
+    if (!user_id || !project_id) {
+        return res.status(400).json({ message: "Missing required parameters" });
+    }
+
+    try {
+        const connection = await makeConnection();
+        
+        // Get number of clusters to decrement from the plan
+        const [clusterRows] = await connection.query('SELECT COUNT(*) as clusterCount FROM `Cluster_Table` WHERE project_id=?', [project_id]);
+        const clusterCount = clusterRows[0]?.clusterCount || 0;
+
+        await connection.query('DELETE FROM `Project_History` WHERE Project_id=?', [project_id]);
+        await connection.query('DELETE FROM `Database_Users` WHERE project_id=?', [project_id]);
+        await connection.query('DELETE FROM `Network_Access` WHERE project_id=?', [project_id]);
+        await connection.query('DELETE FROM `Cluster_Table` WHERE project_id=?', [project_id]);
+        await connection.query('DELETE FROM `Project_Table` WHERE id=? AND user_id=?', [project_id, user_id]);
+        
+        // Update user plan to decrement project and cluster counts
+        await connection.query('UPDATE `Plan` SET Total_Project = GREATEST(0, Total_Project - 1), Total_Clusters = GREATEST(0, Total_Clusters - ?) WHERE user_id=?', [clusterCount, user_id]);
+        
+        return res.status(200).json({ message: "Project deleted successfully" });
+    } catch (error) {
+        console.error("Error deleting project:", error);
+        return res.status(500).json({ message: "Internal server error deleting project" });
     }
 };
 
@@ -94,5 +132,6 @@ module.exports = {
     updateProfile,
     updateWorkspace,
     deleteAccount,
+    deleteProject,
     getCloudinarySignature
 };
