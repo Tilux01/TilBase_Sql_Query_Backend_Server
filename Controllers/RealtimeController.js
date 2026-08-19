@@ -577,6 +577,50 @@ const batchWrite = async (req, res) => {
     }
 };
 
+const executeOnDisconnectMutation = async (actionObj, io) => {
+    const { clusterId, path, action, data } = actionObj;
+    try {
+        const connection = await makeConnection();
+        const segments = path.split('/');
+        const parentPath = segments.slice(0, -1).join('/');
+
+        if (action === 'set' || action === 'setWithPriority') {
+            const jsonData = typeof data === 'string' ? data : JSON.stringify(data);
+            const query = `
+                INSERT INTO Realtime_Store (cluster_id, path, parent_path, document_data) 
+                VALUES (?, ?, ?, ?) 
+                ON DUPLICATE KEY UPDATE document_data = VALUES(document_data)
+            `;
+            await connection.query(query, [clusterId, path, parentPath, jsonData]);
+            io.to(`cluster_${clusterId}`).emit('document_update', { path, eventType: 'set' });
+            io.to(`cluster_${clusterId}`).emit('collection_update', { collection: parentPath, eventType: 'set', path });
+        } else if (action === 'update') {
+            const [rows] = await connection.query("SELECT document_data FROM Realtime_Store WHERE cluster_id = ? AND path = ?", [clusterId, path]);
+            let existing = rows.length > 0 ? (typeof rows[0].document_data === 'string' ? JSON.parse(rows[0].document_data) : rows[0].document_data) : {};
+            let merged = { ...existing };
+            for (const key in data) {
+                merged[key] = data[key];
+            }
+            const jsonData = JSON.stringify(merged);
+            const query = `
+                INSERT INTO Realtime_Store (cluster_id, path, parent_path, document_data) 
+                VALUES (?, ?, ?, ?) 
+                ON DUPLICATE KEY UPDATE document_data = VALUES(document_data)
+            `;
+            await connection.query(query, [clusterId, path, parentPath, jsonData]);
+            io.to(`cluster_${clusterId}`).emit('document_update', { path, eventType: 'update' });
+            io.to(`cluster_${clusterId}`).emit('collection_update', { collection: parentPath, eventType: 'update', path });
+        } else if (action === 'remove') {
+            const query = "DELETE FROM Realtime_Store WHERE cluster_id = ? AND (path = ? OR path LIKE ?)";
+            await connection.query(query, [clusterId, path, `${path}/%`]);
+            io.to(`cluster_${clusterId}`).emit('document_update', { path, eventType: 'delete' });
+            io.to(`cluster_${clusterId}`).emit('collection_update', { collection: parentPath, eventType: 'delete', path });
+        }
+    } catch (e) {
+        console.error("onDisconnect mutation failed:", e);
+    }
+};
+
 module.exports = {
     getCollections,
     getDocuments,
@@ -587,5 +631,6 @@ module.exports = {
     findDocuments,
     countDocuments,
     bulkSaveDocuments,
-    batchWrite
+    batchWrite,
+    executeOnDisconnectMutation
 };

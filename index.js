@@ -30,9 +30,34 @@ io.on('connection', (socket) => {
         console.log(`Client joined cluster room: cluster_${clusterId}`);
     });
 
+    socket.on('chatbase_presence', (data) => {
+        // data = { clusterId, userId, status }
+        socket.to(`cluster_${data.clusterId}`).emit('user_presence_changed', data);
+    });
+
+    socket.on('chatbase_typing', (data) => {
+        // data = { clusterId, channelId, userId, isTyping }
+        socket.to(`cluster_${data.clusterId}`).emit('typing_status', data);
+    });
+
+    socket.on('chatbase_live_reaction', (data) => {
+        // data = { clusterId, channelId, messageId, emoji }
+        socket.to(`cluster_${data.clusterId}`).emit('live_reaction', data);
+    });
+
+    socket.on('chatbase_cursor', (data) => {
+        // data = { clusterId, channelId, userId, coordinates }
+        socket.to(`cluster_${data.clusterId}`).emit('cursor_moved', data);
+    });
+
     socket.on('disconnect', () => {
         console.log('Client disconnected from WebSocket');
+        // Telemetry
+        io.emit('telemetry_disconnect', { timestamp: Date.now() });
     });
+
+    // Telemetry: track new connections
+    io.emit('telemetry_connect', { timestamp: Date.now() });
 });
 
 const crypto = require("crypto");
@@ -60,6 +85,7 @@ const auth = require("./Controllers/Authentication");
 const createCluster = require("./Actions/Cluster/CreateCluster");
 const { fetchTopHistory } = require("./Actions/Cluster/BasicClusterSql");
 const getClusters = require("./Actions/Cluster/getClusters");
+const chatbaseRouter = require("./Routes/ChatbaseRoutes");
 const pauseCluster = require("./Actions/Cluster/PauseCluster");
 const resumeCluster = require("./Actions/Cluster/ResumeCluster");
 const deleteCluster = require("./Actions/Cluster/DeleteClusuter");
@@ -479,6 +505,9 @@ app.post('/api/graphExplorer/getGraph', apiGuard, getGraph);
 app.post('/api/graphExplorer/getNeighbors', apiGuard, getNeighbors);
 app.post('/api/graphExplorer/queryGraph', apiGuard, queryGraph);
 app.post('/api/graphExplorer/clearGraph', apiGuard, clearGraph);
+
+app.use('/api/chatbase', chatbaseRouter);
+app.use('/admin/v1', chatbaseRouter);
 
 // Document Explorer Routes
 app.post('/api/documentExplorer/getCollections', apiGuard, getCollections);

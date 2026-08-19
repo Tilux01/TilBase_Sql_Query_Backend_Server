@@ -18,7 +18,8 @@ const makeConnection = async() =>{
                 connectionLimit: 50,
                 queueLimit: 0,
                 enableKeepAlive: true,
-                keepAliveInitialDelay: 0,
+                keepAliveInitialDelay: 10000,
+                connectTimeout: 20000,
                 ssl: {
                     ca: fs.readFileSync('./ca.pem'),
                     rejectUnauthorized: true

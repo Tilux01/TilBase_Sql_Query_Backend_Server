@@ -1,4 +1,4 @@
-export const generateRandom = () =>{
+const generateRandom = () =>{
     const constrains = 'abcdefghijk0123456789'
     console.log(constrains[3]);
     
@@ -14,3 +14,5 @@ export const generateRandom = () =>{
     }
     return random
 }
+
+module.exports = { generateRandom };

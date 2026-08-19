@@ -149,12 +149,39 @@ const setDocumentData = async (req, res) => {
 
     try {
         const connection = await makeConnection();
+        
+        const processFieldValues = (obj) => {
+            if (typeof obj !== 'object' || obj === null) return obj;
+            if (Array.isArray(obj)) return obj.map(processFieldValues);
+            
+            const result = {};
+            for (const key in obj) {
+                const val = obj[key];
+                if (val && typeof val === 'object' && val.__type === 'FieldValue') {
+                    if (val.operation === 'serverTimestamp') result[key] = Date.now();
+                    else if (val.operation === 'increment') result[key] = val.value; // set doesn't have existing value
+                    else if (val.operation === 'arrayUnion') result[key] = [val.value];
+                    else if (val.operation === 'arrayRemove') result[key] = []; // setting an empty array basically
+                    // deleteField is ignored on set
+                } else {
+                    result[key] = processFieldValues(val);
+                }
+            }
+            return result;
+        };
+        
+        let finalData = documentData;
+        if (typeof finalData === 'string') {
+            try { finalData = JSON.parse(finalData); } catch(e){}
+        }
+        finalData = processFieldValues(finalData);
+        
         const query = `
             INSERT INTO Document_Store (cluster_id, path, parent_path, document_data) 
             VALUES (?, ?, ?, ?) 
             ON DUPLICATE KEY UPDATE document_data = VALUES(document_data)
         `;
-        const jsonData = typeof documentData === 'string' ? documentData : JSON.stringify(documentData);
+        const jsonData = JSON.stringify(finalData);
         
         
         const [existing] = await connection.query("SELECT document_data FROM Document_Store WHERE cluster_id = ? AND path = ?", [clusterId, path]);
@@ -575,6 +602,123 @@ const batchWrite = async (req, res) => {
     }
 };
 
+const runTransaction = async (req, res) => {
+    const { clusterId, reads, writes } = req.body;
+    try {
+        const connection = await makeConnection();
+        await connection.beginTransaction();
+
+        try {
+            // Validate optimistic concurrency
+            for (const r of reads) {
+                const [rows] = await connection.query("SELECT document_data FROM Document_Store WHERE cluster_id = ? AND path = ? FOR UPDATE", [clusterId, r.path]);
+                const currentData = rows.length > 0 ? rows[0].document_data : null;
+                const reqDataStr = typeof r.originalData === 'object' ? JSON.stringify(r.originalData) : r.originalData;
+                const curDataStr = typeof currentData === 'object' ? JSON.stringify(currentData) : currentData;
+                
+                if (curDataStr !== reqDataStr) {
+                    await connection.rollback();
+                    return res.status(409).json({ success: false, retry: true, message: "Transaction failed due to concurrent modification" });
+                }
+            }
+
+            // Execute writes
+            for (const w of writes) {
+                const segments = w.path.split('/');
+                const parentPath = segments.slice(0, -1).join('/');
+                const jsonData = typeof w.data === 'string' ? w.data : JSON.stringify(w.data);
+                
+                if (w.type === 'delete') {
+                    await connection.query("DELETE FROM Document_Store WHERE cluster_id = ? AND path = ?", [clusterId, w.path]);
+                } else if (w.type === 'save' || w.type === 'update') {
+                    const query = `
+                        INSERT INTO Document_Store (cluster_id, path, parent_path, document_data) 
+                        VALUES (?, ?, ?, ?) 
+                        ON DUPLICATE KEY UPDATE document_data = VALUES(document_data)
+                    `;
+                    await connection.query(query, [clusterId, w.path, parentPath, jsonData]);
+                }
+            }
+
+            await connection.commit();
+            res.status(200).json({ success: true, message: "Transaction committed" });
+        } catch (e) {
+            await connection.rollback();
+            throw e;
+        }
+    } catch (e) {
+        console.error("Transaction Error:", e);
+        res.status(500).json({ success: false, message: "Transaction failed" });
+    }
+};
+
+const aggregate = async (req, res) => {
+    const { clusterId, parentPath, filterObj, whereFilters = [], aggregations } = req.body;
+    try {
+        const connection = await makeConnection();
+        const [rows] = await connection.query("SELECT document_data FROM Document_Store WHERE cluster_id = ? AND parent_path = ?", [clusterId, parentPath]);
+        
+        let filtered = rows.map(r => typeof r.document_data === 'string' ? JSON.parse(r.document_data) : r.document_data);
+        
+        if (filterObj && Object.keys(filterObj).length > 0) {
+            filtered = filtered.filter(doc => {
+                for (const key in filterObj) {
+                    if (getNestedValue(doc, key) !== filterObj[key]) return false;
+                }
+                return true;
+            });
+        }
+        
+        if (whereFilters.length > 0) {
+            filtered = filtered.filter(doc => {
+                for (const filter of whereFilters) {
+                    const { field, operator, value } = filter;
+                    const docVal = getNestedValue(doc, field);
+                    let match = false;
+                    switch (operator) {
+                        case '==': match = docVal === value; break;
+                        case '!=': match = docVal !== value; break;
+                        case '>': match = docVal > value; break;
+                        case '>=': match = docVal >= value; break;
+                        case '<': match = docVal < value; break;
+                        case '<=': match = docVal <= value; break;
+                        case 'in': match = Array.isArray(value) && value.includes(docVal); break;
+                    }
+                    if (!match) return false;
+                }
+                return true;
+            });
+        }
+
+        const result = {};
+        for (const agg of aggregations) {
+            if (agg.type === 'count') {
+                result[agg.alias || 'count'] = filtered.length;
+            } else if (agg.type === 'sum') {
+                let sum = 0;
+                filtered.forEach(doc => sum += (getNestedValue(doc, agg.field) || 0));
+                result[agg.alias || 'sum'] = sum;
+            } else if (agg.type === 'average') {
+                let sum = 0;
+                let count = 0;
+                filtered.forEach(doc => {
+                    const val = getNestedValue(doc, agg.field);
+                    if (typeof val === 'number') {
+                        sum += val;
+                        count++;
+                    }
+                });
+                result[agg.alias || 'average'] = count === 0 ? 0 : sum / count;
+            }
+        }
+        
+        res.status(200).json({ success: true, data: result });
+    } catch (e) {
+        console.error(e);
+        res.status(500).json({ success: false, message: "Aggregation failed" });
+    }
+};
+
 module.exports = {
     getCollections,
     getDocuments,
@@ -585,5 +729,7 @@ module.exports = {
     findDocuments,
     countDocuments,
     bulkSaveDocuments,
-    batchWrite
+    batchWrite,
+    runTransaction,
+    aggregate
 };

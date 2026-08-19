@@ -1,12 +1,12 @@
-import emailjs from "@emailjs/nodejs"
-import env from "dotenv"
-env.config()
+const emailjs = require("@emailjs/nodejs");
+const env = require("dotenv");
+env.config();
 emailjs.init({
   publicKey: process.env.EMAILJS_PUBLIC_KEY,
   privateKey: process.env.EMAILJS_PRIVATE_KEY,
 });
 
-export const sendOTP = async(mailAddress) =>{
+const sendOTP = async (mailAddress) => {
     let OTP = "";
     for (let index = 0; index < 6; index++) {
         const generatedNo = Math.floor(Math.random()*9)
@@ -24,3 +24,5 @@ export const sendOTP = async(mailAddress) =>{
         console.log("Error", error);
     }
 }
+
+module.exports = { sendOTP };

@@ -1,4 +1,4 @@
-export const fetchHistory = async (connection, user_id, project_id, page = 1) => {
+const fetchHistory = async (connection, user_id, project_id, page = 1) => {
     const limit = 16;
     const offset = (page - 1) * 15;
     const command = `SELECT * FROM \`Project_History\` WHERE user_id=? AND Project_id=? ORDER BY id DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
@@ -12,7 +12,7 @@ export const fetchHistory = async (connection, user_id, project_id, page = 1) =>
     }
 }
 
-export const fetchProjects = async (connection, user_id) => {
+const fetchProjects = async (connection, user_id) => {
     const command = 'SELECT * FROM `Project_Table` WHERE user_id=?'
     const value = [user_id]
     try {
@@ -24,7 +24,7 @@ export const fetchProjects = async (connection, user_id) => {
     }
 }
 
-export const getProjectDetail = async (connection, userId, projectId) => {
+const getProjectDetail = async (connection, userId, projectId) => {
     const command = 'SELECT * FROM `Project_Table` WHERE id=?'
     const value = [projectId]
     console.log(userId);
@@ -42,7 +42,7 @@ export const getProjectDetail = async (connection, userId, projectId) => {
     }
 }
 
-export const getUserPlan = async (connection, user_id) => {
+const getUserPlan = async (connection, user_id) => {
     const command = 'SELECT * FROM `Plan` WHERE user_id=?'
     const value = [user_id]
     try {
@@ -57,7 +57,7 @@ export const getUserPlan = async (connection, user_id) => {
     }
 }
 
-export const checkPlan = async (connection, userId, ProjectPlan) => {
+const checkPlan = async (connection, userId, ProjectPlan) => {
     try {
         const checkPlanCommand = 'SELECT Plan_Name FROM `Plan` WHERE user_id=?'
         const checkPlanValue = [userId]
@@ -75,7 +75,7 @@ export const checkPlan = async (connection, userId, ProjectPlan) => {
     }
 }
 
-export const createProjectTable = async(connection, userId, ProjectName, projectDescription, Environment, ProjectKey, serverName, serverRegion, ProjectType, ProjectPlan)=>{
+const createProjectTable = async(connection, userId, ProjectName, projectDescription, Environment, ProjectKey, serverName, serverRegion, ProjectType, ProjectPlan)=>{
     try {
         const saveProject = 'INSERT INTO Project_Table (user_id, Project_Name, Project_Description, Environment, Project_Key, Server_Name, Server_Region, Project_Type, Project_Plan) VALUES (?, ?, ?, ?, ?, ?, ?, ?,?)'
         const Values = [userId, ProjectName, projectDescription, Environment, ProjectKey, serverName, serverRegion, ProjectType, ProjectPlan]
@@ -87,7 +87,7 @@ export const createProjectTable = async(connection, userId, ProjectName, project
     }
 }
 
-export const planProjectAdd = async(connection, userId) =>{
+const planProjectAdd = async(connection, userId) =>{
     try {
         const getPlanCommand = 'SELECT Total_Project, Highest_Project FROM `Plan` WHERE user_id=?'
         const value = [userId]
@@ -111,7 +111,7 @@ export const planProjectAdd = async(connection, userId) =>{
     }
 }
 
-export const addProjectHistory = async(connection, userId, ProjectResultId, ProjectName, serverName, serverRegion, ProjectKey) =>{
+const addProjectHistory = async(connection, userId, ProjectResultId, ProjectName, serverName, serverRegion, ProjectKey) =>{
     try {
         const command = 'INSERT INTO Project_History (user_id, Project_id, History_Title, History_Description, Status, History_Type, Other_Stamp) VALUES (?,?,?,?,?,?,?)'
         const values = [userId, ProjectResultId, `Project "${ProjectName}" created`, `Project Creation successful on server ${serverName}/${serverRegion}`, 'Active', 'projectAdd', `ID: ${ProjectKey}`]
@@ -122,7 +122,7 @@ export const addProjectHistory = async(connection, userId, ProjectResultId, Proj
     }
 }
 
-export const connectionAuth = async(connection, userId, user_key, ProjectId, project_key, clusterKey, clusterPassword) =>{
+const connectionAuth = async(connection, userId, user_key, ProjectId, project_key, clusterKey, clusterPassword) =>{
     const checkUserCommand = 'SELECT id FROM `user_cred` WHERE id=? AND profile_key=?'
     const checkUserValue = [userId, user_key]
     const [checkUser] = await connection.query(checkUserCommand, checkUserValue)
@@ -143,3 +143,5 @@ export const connectionAuth = async(connection, userId, user_key, ProjectId, pro
     }
     return checkCluster[0]?.id
 }
+
+module.exports = { fetchHistory, fetchProjects, getProjectDetail, getUserPlan, checkPlan, createProjectTable, planProjectAdd, addProjectHistory, connectionAuth }

@@ -29,6 +29,28 @@ const createCluster = async (req, res) => {
         return res.status(400).json({ message: checkPlan?.error })
     }
     
+    // Chatbase Subscription Limits Check
+    if (Cluster_Type === 'chatbase' || Cluster_Type === 'chatbase_secure') {
+        const getPlanCommand = 'SELECT Plan_Name FROM `Plan` WHERE id=?';
+        const [planRes] = await connection.query(getPlanCommand, [checkPlan]);
+        if (planRes && planRes.length > 0) {
+            const planName = planRes[0].Plan_Name || 'free';
+            
+            // Count existing chatbase clusters
+            const countCommand = 'SELECT COUNT(*) as count FROM `Cluster_Table` WHERE user_id=? AND (Cluster_Type=? OR Cluster_Type=?)';
+            const [countRes] = await connection.query(countCommand, [user_id, 'chatbase', 'chatbase_secure']);
+            const chatbaseCount = countRes[0].count;
+            
+            let maxChatbase = 1;
+            if (planName === 'standard') maxChatbase = 5;
+            if (planName === 'premium') maxChatbase = 99999;
+            
+            if (chatbaseCount >= maxChatbase) {
+                return res.status(403).json({ message: `Your ${planName} plan is limited to ${maxChatbase} Chatbase cluster(s). Please upgrade to create more.` });
+            }
+        }
+    }
+    
     const planAdd = await addPlan(checkPlan, user_id)
     if (planAdd?.error) {
         return res.status(400).json({message:planAdd?.error})
