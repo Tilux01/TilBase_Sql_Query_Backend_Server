@@ -8,6 +8,8 @@ const { Server } = require("socket.io");
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cors())
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 const server = http.createServer(app);
 const port = process.env.PORT || 4255
