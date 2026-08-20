@@ -22,7 +22,9 @@ const io = new Server(server, {
     methods: ["GET", "POST"]
   }
 });
+const { initializeBroadcastEngine } = require("./Controllers/BroadcastController");
 app.set('io', io);
+initializeBroadcastEngine(io);
 
 io.on('connection', (socket) => {
     console.log('A client connected via WebSocket');
@@ -50,6 +52,30 @@ io.on('connection', (socket) => {
     socket.on('chatbase_cursor', (data) => {
         // data = { clusterId, channelId, userId, coordinates }
         socket.to(`cluster_${data.clusterId}`).emit('cursor_moved', data);
+    });
+
+    socket.on('chatbase_register_user', (userId) => {
+        socket.join(`user_${userId}`);
+    });
+
+    socket.on('webrtc_offer', (data) => {
+        // data = { targetUserId, callerId, sdp, isVideo, clusterId }
+        socket.to(`user_${data.targetUserId}`).emit('webrtc_incoming_call', data);
+    });
+
+    socket.on('webrtc_answer', (data) => {
+        // data = { targetUserId, answerSdp, clusterId }
+        socket.to(`user_${data.targetUserId}`).emit('webrtc_call_accepted', data);
+    });
+
+    socket.on('webrtc_ice_candidate', (data) => {
+        // data = { targetUserId, candidate, clusterId }
+        socket.to(`user_${data.targetUserId}`).emit('webrtc_ice_candidate_received', data);
+    });
+
+    socket.on('webrtc_reject', (data) => {
+        // data = { targetUserId, clusterId }
+        socket.to(`user_${data.targetUserId}`).emit('webrtc_call_rejected', data);
     });
 
     socket.on('disconnect', () => {

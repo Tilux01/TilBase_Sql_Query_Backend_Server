@@ -1,5 +1,24 @@
 const makeConnection = require("../SQLConnection");
 const { v4: uuidv4 } = require('uuid');
+const cloudinary = require("cloudinary").v2;
+const fs = require('fs');
+require("dotenv").config();
+
+cloudinary.config({
+    cloud_name: process.env.cloudName,
+    api_key: process.env.cloudApiKey,
+    api_secret: process.env.cloudApiSecret,
+    secure: true
+});
+
+const webpush = require('web-push');
+if (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) {
+    webpush.setVapidDetails(
+        'mailto:admin@tilbase.com',
+        process.env.VAPID_PUBLIC_KEY,
+        process.env.VAPID_PRIVATE_KEY
+    );
+}
 
 const logLocalMetric = async (clusterId, queryType, executionTimeMs) => {
     try {
@@ -121,6 +140,32 @@ const sendMessage = async (req, res) => {
                 isEncrypted,
                 created_at: new Date().toISOString()
             });
+        }
+
+        // --- Push Notifications Broadcast ---
+        if (typeof webpush !== 'undefined' && process.env.VAPID_PUBLIC_KEY) {
+            try {
+                const [subs] = await connection.query(`
+                    SELECT p.endpoint, p.p256dh_key, p.auth_key
+                    FROM Push_Subscriptions p
+                    JOIN Chatbase_Members m ON m.user_id = p.user_id
+                    WHERE m.cluster_id = ? AND m.channel_id = ? AND m.user_id != ?
+                `, [clusterId, channelId, senderId]);
+
+                const pushPayload = JSON.stringify({
+                    title: "New Message",
+                    body: isEncrypted ? "You have a new encrypted message" : (text || "New media received"),
+                    url: `/cluster/${clusterId}/chat/${channelId}`
+                });
+
+                subs.forEach(sub => {
+                    const pushConfig = {
+                        endpoint: sub.endpoint,
+                        keys: { p256dh: sub.p256dh_key, auth: sub.auth_key }
+                    };
+                    webpush.sendNotification(pushConfig, pushPayload).catch(e => {});
+                });
+            } catch(e) {}
         }
 
         res.status(201).json({ success: true, messageId, message: "Message sent" });
@@ -368,11 +413,22 @@ const sendMediaMessage = async (req, res) => {
         if (!req.file) return res.status(400).json({ success: false, message: "No media file uploaded" });
 
         const startTime = Date.now();
+        
+        // Upload to Cloudinary
+        const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+            resource_type: "auto",
+            folder: `chatbase/${clusterId}/${channelId}`
+        });
+        
+        // Delete local temp file
+        fs.unlinkSync(req.file.path);
+
         const connection = await makeConnection();
         const msgId = uuidv4();
         
-        const mediaUrl = `/uploads/${req.file.filename}`;
-        const attachments = JSON.stringify([{ url: mediaUrl, type: req.file.mimetype, name: req.file.originalname }]);
+        const mediaUrl = uploadResult.secure_url;
+        const typeFlag = req.body.mediaType || req.file.mimetype;
+        const attachments = JSON.stringify([{ url: mediaUrl, type: typeFlag, name: req.file.originalname }]);
 
         const query = `
             INSERT INTO Chatbase_Messages (cluster_id, channel_id, msg_id, sender_id, text, attachments)
@@ -387,6 +443,7 @@ const sendMediaMessage = async (req, res) => {
         
         res.status(201).json({ success: true, msgId, mediaUrl });
     } catch (error) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ success: false, message: error.message });
     }
 };
@@ -397,10 +454,19 @@ const sendVoiceNote = async (req, res) => {
         if (!req.file) return res.status(400).json({ success: false, message: "No voice file uploaded" });
 
         const startTime = Date.now();
+        
+        // Upload to Cloudinary
+        const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+            resource_type: "video", // audio is treated as video in Cloudinary
+            folder: `chatbase/${clusterId}/${channelId}`
+        });
+        
+        fs.unlinkSync(req.file.path);
+
         const connection = await makeConnection();
         const msgId = uuidv4();
         
-        const voiceUrl = `/uploads/${req.file.filename}`;
+        const voiceUrl = uploadResult.secure_url;
         const attachments = JSON.stringify([{ url: voiceUrl, type: 'audio/voice-note', duration: duration }]);
 
         const query = `
@@ -416,9 +482,12 @@ const sendVoiceNote = async (req, res) => {
         
         res.status(201).json({ success: true, msgId, voiceUrl });
     } catch (error) {
+        if (req.file && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         res.status(500).json({ success: false, message: error.message });
     }
 };
+
+
 
 // PHASE 6: ADVANCED MESSAGE & CHANNEL CONTROLS
 
@@ -732,9 +801,143 @@ const unbanMember = async (req, res) => {
     }
 };
 
+const getVapidKey = (req, res) => {
+    if (!process.env.VAPID_PUBLIC_KEY) {
+        return res.status(500).json({ success: false, message: "VAPID key not configured" });
+    }
+    res.status(200).json({ success: true, publicKey: process.env.VAPID_PUBLIC_KEY });
+};
+
+const subscribePush = async (req, res) => {
+    const { clusterId, userId, subscription } = req.body;
+    try {
+        const connection = await makeConnection();
+        const query = `
+            INSERT INTO Push_Subscriptions (cluster_id, user_id, endpoint, p256dh_key, auth_key)
+            VALUES (?, ?, ?, ?, ?)
+            ON DUPLICATE KEY UPDATE 
+            endpoint = VALUES(endpoint), p256dh_key = VALUES(p256dh_key), auth_key = VALUES(auth_key)
+        `;
+        await connection.query(query, [
+            clusterId, 
+            userId, 
+            subscription.endpoint, 
+            subscription.keys.p256dh, 
+            subscription.keys.auth
+        ]);
+        res.status(201).json({ success: true });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const getThreadMessages = async (req, res) => {
+    const { clusterId, parentMsgId, limit = 50, offset = 0 } = req.body;
+    if (!parentMsgId) return res.status(400).json({ success: false, message: "parentMsgId is required" });
+
+    try {
+        const startTime = Date.now();
+        const connection = await makeConnection();
+        const query = `
+            SELECT * FROM Chatbase_Messages 
+            WHERE cluster_id = ? AND parent_msg_id = ? 
+            ORDER BY created_at ASC 
+            LIMIT ? OFFSET ?
+        `;
+        const [messages] = await connection.query(query, [clusterId, parentMsgId, parseInt(limit), parseInt(offset)]);
+        await logLocalMetric(clusterId, 'Read', Date.now() - startTime);
+
+        res.status(200).json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const searchMessages = async (req, res) => {
+    const { clusterId, channelId, searchQuery, limit = 50 } = req.body;
+    if (!searchQuery) return res.status(400).json({ success: false, message: "searchQuery is required" });
+
+    try {
+        const startTime = Date.now();
+        const connection = await makeConnection();
+        const query = `
+            SELECT * FROM Chatbase_Messages 
+            WHERE cluster_id = ? AND channel_id = ? AND text LIKE ? 
+            ORDER BY created_at DESC 
+            LIMIT ?
+        `;
+        const wildcardQuery = `%${searchQuery}%`;
+        const [messages] = await connection.query(query, [clusterId, channelId, wildcardQuery, parseInt(limit)]);
+        await logLocalMetric(clusterId, 'Read', Date.now() - startTime);
+
+        res.status(200).json({ success: true, messages });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const markAsDelivered = async (req, res) => {
+    const { clusterId, channelId, userId, msgId } = req.body;
+    if (!msgId || !userId) return res.status(400).json({ success: false, message: "msgId and userId required" });
+
+    try {
+        const startTime = Date.now();
+        const connection = await makeConnection();
+        
+        const query = `
+            INSERT INTO Chatbase_Message_Reads (msg_id, user_id, channel_id, cluster_id, status)
+            VALUES (?, ?, ?, ?, 'delivered')
+            ON DUPLICATE KEY UPDATE status = IF(status='read', 'read', 'delivered'), updated_at = CURRENT_TIMESTAMP
+        `;
+        await connection.query(query, [msgId, userId, channelId, clusterId]);
+        await logLocalMetric(clusterId, 'Write', Date.now() - startTime);
+
+        // Notify socket
+        const socketIo = req.app.get('io');
+        if (socketIo) {
+            socketIo.to(`chatbase_${channelId}`).emit('message_status_changed', { msgId, userId, status: 'delivered' });
+        }
+
+        res.status(200).json({ success: true, message: "Marked as delivered" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
+const updateMetadata = async (req, res) => {
+    const { clusterId, channelId, metadata } = req.body;
+    const userId = req.user_id || req.sdk_user_id || req.body.userId;
+    
+    try {
+        const connection = await makeConnection();
+        await enforceAdmin(connection, clusterId, channelId, userId);
+        
+        const startTime = Date.now();
+        const query = `
+            UPDATE Chatbase_Channels 
+            SET metadata = ? 
+            WHERE channel_id = ? AND cluster_id = ?
+        `;
+        await connection.query(query, [JSON.stringify(metadata), channelId, clusterId]);
+        await logLocalMetric(clusterId, 'Write', Date.now() - startTime);
+        
+        // Notify socket
+        const socketIo = req.app.get('io');
+        if (socketIo) {
+            socketIo.to(`chatbase_${channelId}`).emit('channel_metadata_updated', { channelId, metadata });
+        }
+
+        res.status(200).json({ success: true, message: "Metadata updated" });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+};
+
 module.exports = {
     getMembers,
     unbanMember,
+    getVapidKey,
+    subscribePush,
     createChannel,
     joinChannel,
     sendMessage,
@@ -765,5 +968,9 @@ module.exports = {
     syncLocalCache,
     subscribeFieldPath,
     sendMediaMessage,
-    sendVoiceNote
+    sendVoiceNote,
+    getThreadMessages,
+    searchMessages,
+    markAsDelivered,
+    updateMetadata
 };

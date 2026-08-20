@@ -123,6 +123,21 @@ async function setupChatbase() {
         `);
         console.log("✅ Chatbase_AI_Tasks table created or exists.");
 
+        // 8. Push_Subscriptions
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS Push_Subscriptions (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                cluster_id VARCHAR(150) NOT NULL,
+                user_id VARCHAR(150) NOT NULL,
+                endpoint TEXT NOT NULL,
+                p256dh_key TEXT NOT NULL,
+                auth_key TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE KEY unique_sub (cluster_id, user_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+        `);
+        console.log("✅ Push_Subscriptions table created or exists.");
+
         console.log("🎉 Chatbase Database Setup Complete!");
         process.exit(0);
 

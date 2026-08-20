@@ -1,5 +1,5 @@
 const express = require("express");
-const { createChannel, joinChannel, sendMessage, getMessages, banMember, muteMember, updateMemberRole, editMessage, deleteMessage, scheduleMessage, addReaction, removeReaction, scheduleAITask, getAITasks, getChannels, freezeChannel, unfreezeChannel, pinMessage, unpinMessage, forwardMessage, markAsRead, resendFailedMessage, postAIStream, updateAIStreamTask, registerClientTool, handoffToHuman, streamDeltaPatch, syncLocalCache, subscribeFieldPath, sendMediaMessage, sendVoiceNote, getMembers, unbanMember } = require("../Controllers/ChatbaseController");
+const { createChannel, joinChannel, sendMessage, getMessages, banMember, muteMember, updateMemberRole, editMessage, deleteMessage, scheduleMessage, addReaction, removeReaction, scheduleAITask, getAITasks, getChannels, freezeChannel, unfreezeChannel, pinMessage, unpinMessage, forwardMessage, markAsRead, resendFailedMessage, postAIStream, updateAIStreamTask, registerClientTool, handoffToHuman, streamDeltaPatch, syncLocalCache, subscribeFieldPath, sendMediaMessage, sendVoiceNote, getMembers, unbanMember, getVapidKey, subscribePush, getThreadMessages, searchMessages, markAsDelivered, updateMetadata } = require("../Controllers/ChatbaseController");
 const apiGuard = require("../Middleware/apiGuard");
 const multer = require("multer");
 const path = require("path");
@@ -79,5 +79,15 @@ router.post("/syncLocalCache", syncLocalCache);
 router.post("/subscribeFieldPath", subscribeFieldPath);
 router.post("/sendMediaMessage", upload.single('media'), sendMediaMessage);
 router.post("/sendVoiceNote", upload.single('voice'), sendVoiceNote);
+
+// Push Notifications
+router.get("/push/vapidKey", getVapidKey);
+router.post("/push/subscribe", subscribePush);
+
+// Batch 4: Advanced Capabilities
+router.post("/getThreadMessages", getThreadMessages);
+router.post("/searchMessages", searchMessages);
+router.post("/markAsDelivered", markAsDelivered);
+router.post("/updateMetadata", updateMetadata);
 
 module.exports = router;
